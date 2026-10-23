@@ -56,7 +56,7 @@
     },
     {
       "id": "REV-PERM",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/builtin/permissions.rs"
       ],
@@ -68,9 +68,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "7a657bbda00f3a1673558eb1069281f46fc03673991e2e2bcc61d8bfecf5bdd3"
+        "src/builtin/permissions.rs": "a53ae7f56ffc89af64a58f01c895545c1fa4195aae4c7c8319c952c5df400253"
       },
-      "design_evidence_partial": "RV-STORAGE-02 changed common implementation; behavior/parity review still pending."
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PERM-01 pre/post comparisons",
+      "test_evidence_partial": "60 Rust tests; v1 casefold roundtrip/collision/deny regressions; UUID/LuckPerms semantic parity unverified"
     },
     {
       "id": "REV-UTIL",
@@ -108,7 +109,7 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "7a657bbda00f3a1673558eb1069281f46fc03673991e2e2bcc61d8bfecf5bdd3",
+        "src/builtin/permissions.rs": "a53ae7f56ffc89af64a58f01c895545c1fa4195aae4c7c8319c952c5df400253",
         "src/builtin/utilities.rs": "6c182dade3321bd2071645a27a4432b741b94938b1a12a4fe254b507d8b14dfa"
       },
       "test_evidence_partial": "57 Rust tests; real 2-process lock, clean/SIGKILL restart and Java lifecycle; deterministic post-rename directory sync failure tests; real power-loss pending",

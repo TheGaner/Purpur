@@ -17,6 +17,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [ ] RV-STATUS: Verify status/ping response framing, version behavior, limits and dynamic future semantics against Horizon and Paper/Purpur.
 - [ ] RV-CMD: Differentially audit command tree, argument parsing, suggestions and permissions against Paper/Purpur Brigadier, SteelMC, FerrumC and LuckPerms.
 - [ ] RV-PERM: Compare native Rust permissions to LuckPerms calculator, graph, contexts, cache and persistence, plus relevant SteelMC/Paper semantics.
+  - [x] RV-PERM-01: Compare pinned LuckPerms calculator, cache, storage and SteelMC group snapshots; fix mixed-case legacy subject/group access and migrate unambiguous v1 names in memory while refusing colliding identities. Three tests, 60 total passed. Broader REV-PERM remains IN_REVIEW.
 - [ ] RV-UTIL: Compare homes/warps and planned player actions against EssentialsX, Bukkit/Paper, and Folia owner-affine teleport.
 - [ ] RV-STORAGE: Audit JSON persistence durability and scaling against LuckPerms/EssentialsX and SteelMC/FerrumC before choosing a database design.
   - [x] RV-STORAGE-01: Source compare pinned LuckPerms per-path locks and backends, EssentialsX UUID player files, FerrumC LMDB and SteelMC region storage; implement single-writer JSON safety, durable-rename improvements, output-size cap and real two-process persistence tests. The broader storage review remains IN_REVIEW.
@@ -155,3 +156,8 @@ RV-STORAGE-01 completed as **focused hardening**, not full review approval. Nati
 ## 2026-10-23 retrospective ambiguous-write recovery checkpoint
 
 RV-STORAGE-02 was completed as a narrow safety fix, NOT complete storage approval. Rust 1.90 full test suite 57/57 passed (54 starting baseline); release build, rustfmt, real two-instance write rejection and clean/unclean process restarts, normal/hung Java sidecar regression passed. An injected directory-sync failure after successful rename now leaves permissions fail closed and utilities unavailable until reopen, preventing a stale live snapshot from overwriting disk. Independent pre-rename failures remain retryable. The repository retains native JSON v1 compatibility and first-party AGPL source; no real power-loss test, transaction migration or performance benchmark occurred. See docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Phase -1 mandatory review hold remains ACTIVE.
+
+
+## 2026-10-23 native permissions case-identity checkpoint
+
+RV-PERM-01 closed as a focused correctness fix after RV-STORAGE-02. Case-insensitive name-based subjects/group links now resolve identically; old non-colliding mixed-case JSON v1 files remain readable, and potentially conflicting historic grants fail closed rather than merging. Three added tests brought the Rust suite to 60 passed, and real-process mixed-case lookup and persistence smoke passed; this is not real player/UUID authentication and does not establish full LuckPerms or Bukkit parity. Detailed source comparison and limitations in docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Mandatory nine-area retrospective gate is still active.

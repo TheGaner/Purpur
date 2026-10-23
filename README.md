@@ -140,3 +140,16 @@ is in this state. Errors before file replacement remain retryable.
 This was tested with injected errors on the real JSON writer, and separately
 with a clean and SIGKILL server restart. It does not prove resilience to a
 real power cut during an unsafe filesystem or across distributed stores.
+
+
+### Legacy permission subject normalization
+
+Name-based native permission subjects and group links are now ASCII-casefolded
+on administrative writes and lookups. Existing version 1 JSON permission files
+with unambiguous legacy capitalization load and normalize in memory; their
+normalized representation is saved on the next successful write. An old file
+containing two case variants of the same subject fails startup rather than
+combining potentially conflicting security grants. Administrators must resolve
+those duplicate records manually. This is a pre-playable console convenience,
+not an authenticated player identity system: future player permissions must be
+keyed by validated UUIDs, not client-supplied names or UUIDs.

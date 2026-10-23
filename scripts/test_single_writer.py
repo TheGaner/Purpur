@@ -30,6 +30,7 @@ def test():
                 assert "store already open by another writer" in second.stderr,second.stderr
                 out,err=server.communicate(
                     "permissions set alice essentials.home allow\n"
+                    "permissions set ALICE test.review deny\n"
                     "sethome alice base world 1 65 2\nstop\n",
                     timeout=8)
                 assert server.returncode==0, (out,err)
@@ -40,10 +41,11 @@ def test():
                     server.kill()
                     server.wait(timeout=3)
         third=subprocess.run(args,input=
-            "permissions check alice essentials.home\nhomes alice\nstop\n",
+            "permissions check alice essentials.home\n"
+            "permissions check alice test.review\nhomes alice\nstop\n",
             text=True,capture_output=True,cwd=root,timeout=8)
         assert third.returncode==0,(third.stdout,third.stderr)
-        assert "Allow" in third.stdout and "base" in third.stdout,third.stdout
+        assert "Allow" in third.stdout and "Deny" in third.stdout and "base" in third.stdout, third.stdout
         # An unclean process exit must release the OS advisory locks.
         with (root/"crash.log").open("w+") as log:
             crashed=subprocess.Popen(args,stdin=subprocess.PIPE,
@@ -56,10 +58,11 @@ def test():
                     crashed.kill()
                 crashed.wait(timeout=4)
         resumed=subprocess.run(args,input=
-            "permissions check alice essentials.home\nhomes alice\nstop\n",
+            "permissions check alice essentials.home\n"
+            "permissions check alice test.review\nhomes alice\nstop\n",
             text=True,capture_output=True,cwd=root,timeout=8)
         assert resumed.returncode==0,(resumed.stdout,resumed.stderr)
-        assert "Allow" in resumed.stdout and "base" in resumed.stdout
+        assert "Allow" in resumed.stdout and "Deny" in resumed.stdout and "base" in resumed.stdout
         print("PASS: second writer denied; clean/unclean restarts preserve data")
 if __name__=="__main__":
     test()

@@ -106,10 +106,11 @@ pub struct NativePermissions {
 // Store identities in disjoint namespaces so player UUIDs/names never
 // resolve as group subjects, even if a remote client supplies "group:admin".
 fn config_subject(subject: &str) -> String {
-    if subject.starts_with("group:") || subject.starts_with("user:") {
-        subject.to_owned()
+    let canonical = subject.to_ascii_lowercase();
+    if canonical.starts_with("group:") || canonical.starts_with("user:") {
+        canonical
     } else {
-        format!("user:{subject}")
+        format!("user:{canonical}")
     }
 }
 fn valid_id(s: &str) -> bool {
@@ -228,6 +229,9 @@ impl NativePermissions {
         } else {
             Saved::default()
         };
+        // Old JSON v1 data could contain mixed-case player/group keys. Do not
+        // silently merge two legacy identities with potentially opposite grants.
+        let data = Self::canonicalize(data)?;
         Self::validate(&data)?;
         Ok(Self {
             file,
@@ -237,6 +241,43 @@ impl NativePermissions {
             revision: 0,
             poisoned: false,
         })
+    }
+    fn canonicalize(mut data: Saved) -> io::Result<Saved> {
+        let mut grants = BTreeMap::new();
+        for (subject, mut rules) in data.grants {
+            let key = subject.to_ascii_lowercase();
+            if !valid_id(&key) || grants.contains_key(&key) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "ambiguous or invalid mixed-case permission subject",
+                ));
+            }
+            for rule in &mut rules {
+                rule.node.make_ascii_lowercase();
+            }
+            grants.insert(key, rules);
+        }
+        let mut parents = BTreeMap::new();
+        for (subject, groups) in data.parents {
+            let key = subject.to_ascii_lowercase();
+            if !valid_id(&key) || parents.contains_key(&key) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "ambiguous or invalid mixed-case permission parent",
+                ));
+            }
+            let mut normalized = Vec::new();
+            for group in groups {
+                let group = group.to_ascii_lowercase();
+                if !normalized.contains(&group) {
+                    normalized.push(group);
+                }
+            }
+            parents.insert(key, normalized);
+        }
+        data.grants = grants;
+        data.parents = parents;
+        Ok(data)
     }
     fn validate(data: &Saved) -> io::Result<()> {
         if data.version != 1 || data.grants.len() > 10_000 || data.parents.len() > 10_000 {
@@ -343,7 +384,7 @@ impl NativePermissions {
             ));
         }
         let mut next = self.data.clone();
-        let link = format!("group:{group}");
+        let link = format!("group:{}", group.to_ascii_lowercase());
         let groups = next.parents.entry(config_subject(principal)).or_default();
         if !groups.contains(&link) {
             groups.push(link);
@@ -353,7 +394,7 @@ impl NativePermissions {
     pub fn remove_parent(&mut self, principal: &str, group: &str) -> io::Result<()> {
         let mut next = self.data.clone();
         if let Some(groups) = next.parents.get_mut(&config_subject(principal)) {
-            groups.retain(|g| g != &format!("group:{group}"));
+            groups.retain(|g| g != &format!("group:{}", group.to_ascii_lowercase()));
         }
         self.commit(next)
     }
@@ -367,7 +408,7 @@ impl NativePermissions {
             return Decision::Undefined;
         }
         let key = Key {
-            principal: principal.to_owned(),
+            principal: principal.to_ascii_lowercase(),
             node: node.to_ascii_lowercase(),
             world: world.map(str::to_owned),
         };
@@ -377,7 +418,7 @@ impl NativePermissions {
                 return cached.decision;
             }
         }
-        let mut subjects = VecDeque::from([(format!("user:{principal}"), 0usize)]);
+        let mut subjects = VecDeque::from([(format!("user:{}", key.principal), 0usize)]);
         let mut visited = HashSet::new();
         let mut best: Option<((usize, usize, usize), Decision)> = None;
         let mut next_expiry: Option<u64> = None;
@@ -659,6 +700,56 @@ mod tests {
             Decision::Allow
         );
         drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn subject_case_is_consistent_for_direct_and_group_access() {
+        let (path, mut db) = db();
+        db.set("Alex", "Test.Use", Decision::Deny, None, None)
+            .unwrap();
+        assert_eq!(db.resolve("aLeX", "test.use", None, 10), Decision::Deny);
+        db.set("group:STAFF", "test.staff", Decision::Allow, None, None)
+            .unwrap();
+        db.add_parent("ALEX", "StAfF").unwrap();
+        assert_eq!(db.resolve("alex", "test.staff", None, 10), Decision::Allow);
+        db.remove_parent("AlEx", "STAFF").unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.staff", None, 10),
+            Decision::Undefined
+        );
+        let disk = fs::read_to_string(&path).unwrap();
+        assert!(disk.contains("user:alex") && disk.contains("group:staff"));
+        assert!(!disk.contains("user:Alex") && !disk.contains("group:STAFF"));
+        drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn historical_casefold_json_loads_without_losing_permissions() {
+        let (path, original) = db();
+        drop(original);
+        fs::write(&path, r#"{"version":1,"grants":{"user:Alex":[{"node":"TEST.USE","decision":"deny"}],"group:STAFF":[{"node":"test.staff","decision":"allow"}]},"parents":{"user:Alex":["group:STAFF"]}}"#).unwrap();
+        let mut db = NativePermissions::open(&path).unwrap();
+        assert_eq!(db.resolve("aLEX", "test.use", None, 10), Decision::Deny);
+        assert_eq!(db.resolve("alex", "test.staff", None, 10), Decision::Allow);
+        db.set("aLeX", "test.extra", Decision::Allow, None, None)
+            .unwrap();
+        drop(db);
+        let disk = fs::read_to_string(&path).unwrap();
+        assert!(disk.contains("user:alex") && disk.contains("group:staff"));
+        assert!(!disk.contains("user:Alex") && !disk.contains("group:STAFF"));
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn conflicting_historical_case_aliases_fail_closed() {
+        let (path, original) = db();
+        drop(original);
+        fs::write(&path,r#"{"version":1,"grants":{"user:Alex":[{"node":"test.use","decision":"allow"}],"user:alex":[{"node":"test.use","decision":"deny"}]}}"#).unwrap();
+        let error = NativePermissions::open(&path).err().unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("ambiguous"));
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json.lock"));
     }
