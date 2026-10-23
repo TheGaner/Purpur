@@ -8,3 +8,5 @@
 
 /examples/rust-plugin/target/
 /examples/rust-plugin/Cargo.lock
+
+/data

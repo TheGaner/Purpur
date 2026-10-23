@@ -214,6 +214,7 @@ pub struct Parameter {
 #[derive(Clone, Debug)]
 pub enum Handler {
     Builtin(Builtin),
+    Core,
     Plugin { owner: String },
 }
 #[derive(Clone, Copy, Debug)]
@@ -242,6 +243,10 @@ pub enum Effect {
     Stop,
     Plugin {
         owner: String,
+        command: String,
+        args: String,
+    },
+    Core {
         command: String,
         args: String,
     },
@@ -556,6 +561,12 @@ impl Registry {
             effect: Effect::None,
         };
         match &spec.handler {
+            Handler::Core => {
+                reply.effect = Effect::Core {
+                    command: spec.name.clone(),
+                    args: args[1..].join(" "),
+                };
+            }
             Handler::Plugin { owner } => {
                 reply.effect = Effect::Plugin {
                     owner: owner.to_string(),

@@ -74,3 +74,12 @@ See docs/REFERENCE_ARCHITECTURE_RESEARCH_2026-10-23.md for detailed architecture
 A live console diagnostic command, commandtree, reports the permission-filtered
 registry projection's node count, revision and validity. This is explicitly
 not the Minecraft command-tree wire packet or client gameplay support.
+
+
+## Always-on native Rust services
+
+Native permission/group and home/warp data services now load by default, with no Java or plugin installation. Use --data DIR to locate persistence (default data/, ignored by Git). Invalid JSON fails startup rather than silently discarding rules or locations.
+
+Console examples: nativefeatures ; permissions set alex essentials.home allow ; permissions check alex essentials.home ; permissions parent alex staff ; sethome alex base minecraft:overworld 1 64 2 ; homes alex ; setwarp town minecraft:overworld 2 64 3 ; warp town.
+
+Homes and warps currently store and report coordinates; teleport is blocked until player/world simulation is implemented. The native modules are independently written early subsets, NOT complete official EssentialsX or LuckPerms ports. See docs/ROADMAP.md and docs/LICENSING.md for source combination gates.

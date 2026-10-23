@@ -1,6 +1,6 @@
 # Purpur-Horizon master roadmap
 
-Goal: independently runnable Rust-only dedicated server for Horizon clients with version-aligned Purpur behavior, native Rust plugins, and compatible existing Java plugins. No Horizon client/engine or Purpur/Java server executable in the runtime. The optional JVM is only for Java plugins.
+Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON native Rust EssentialsX-style utilities and LuckPerms-style permissions; no Java JAR required. Optional external Java plugin compatibility remains a separate feature.
 
 Status: 2026-10-23, protocol 777 status/ping, nonplayable login rejection, simple 20Hz tick loop, Rust native plugin ABI, Java lifecycle-only bridge, now a shared Rust command registry. Not a playable game.
 
@@ -8,6 +8,26 @@ Status: 2026-10-23, protocol 777 status/ping, nonplayable login rejection, simpl
 - [x] Independent Rust status/ping server and tested native/JVM plugin lifecycle.
 - [ ] Harden configuration, graceful shutdown, bounded connection counts, CI, reproducible packaging.
 Gate: distributable release runs without Horizon engine/Java server dependencies.
+
+## 0A — Licensing and source-combination prerequisites [ACTIVE]
+
+- [x] Verify AGPL-3.0-or-later project, GPLv3 EssentialsX, MIT LuckPerms and AGPL SteelMC license families.
+- [x] Document GPLv3 §13 / AGPLv3 §13 combination, per-file provenance, notices, source-access and release audit in docs/LICENSING.md.
+- [x] Implement initial native Rust modules independently (no EssentialsX/LuckPerms source copied).
+- [ ] Prior to ANY upstream source transplant: pin SHA, inspect copyright/exception/data/dependency licenses, choose independent vs direct-port boundary, preserve per-file terms and change logs.
+- [ ] Automate Cargo license inventory/SBOM and publish matching source plus prominent AGPL network source link for deployed versions.
+- [ ] Obtain qualified legal review for large GPLv3-covered transplants and distribution.
+Gate: every copied file attributed, compatible, legally reviewed where needed, and covered-source release obligations fulfilled.
+
+## 0B — Always-on native essentials and permissions [FOUNDATION IMPLEMENTED]
+
+- [x] Native Rust permission evaluator with tri-state allow/deny/undefined, group ancestry, world context, expiring rules, revision-aware bounded cache, persistence and fail-closed invalid-data loading.
+- [x] Native Rust utilities storing named home and warp locations in validated, persistent JSON; no Java, plugin loader or external service required.
+- [x] Console administrative commands for permission checks/grants, group membership, home and warp storage/inspection.
+- [ ] Full LuckPerms parity: exact inheritance precedence, context factories, weights, metadata, time-bound groups, async DB adapters and migrations; a test oracle.
+- [ ] Full EssentialsX behavior: player-bound home/warp/spawn teleport, requests, chat, cooldowns, kits, economy, moderation, events, config and data migration.
+- [ ] Transactional SQLite persistence and crash tests, robust revisions across concurrent region threads, metrics and semantic differential tests.
+Gate: independent first-party Rust native services usable with real players, persistent across restarts, measured and tested against upstream behavior.
 
 ## 1 — Command layer [ACTIVE]
 - [x] Quoted/escaped lexer with input bounds.
@@ -17,7 +37,8 @@ Gate: distributable release runs without Horizon engine/Java server dependencies
 - [x] Optional native Rust ABI command declarations and demo plugin dispatch.
 - [x] C-01: Deterministic, permission-filtered, versioned Brigadier-style protocol-neutral graph with canonical alias redirects, typed arguments and bounded registration; 10 new Rust tests. NOT a wire Commands packet encoder.
 - [x] C-02: Bounded console command backlog (1,024) and per-tick dispatch cap (128), with overflow/tick regression tests. Player commands and suggestions still require separate queues.
-- [ ] C-03: LuckPerms-style tri-state contextual permission snapshot/caching model with explicit invalidation; profile before optimizing.
+- [x] C-03a: Native tri-state context-aware permissions persistence, group inheritance, expiry-aware bounded cache and invalidation (subset only).
+- [ ] C-03b: Full LuckPerms-compatible semantics plus per-context immutable snapshots and benchmarked caching.
 - [ ] C-04: Encode protocol 777 Commands packet and implement real player command/suggestion inbound handlers (depends on Horizon login).
 - [ ] Persistent groups, nodes, expiring grants, LuckPerms-style contexts and metadata/caching.
 - [ ] Real player command ingress, Brigadier command tree and suggestions, client packet replies.
@@ -47,13 +68,13 @@ Gate: playable correct chunks across all dimensions and reproducible benchmark i
 - [ ] Seed and packet replay oracle for original Purpur 26.3 behaviors; differential acceptance, tests per toggle.
 Gate: survival, commands and configuration parity for documented subset.
 
-## 5 — Plugin APIs, EssentialsX, LuckPerms [PLANNED]
+## 5 — Extensibility and optional Java API compatibility [PLANNED]
 - [ ] Shared command/event/permissions/world/player APIs and stable event cancellation/order.
 - [ ] Versioned Rust-WASM plugins with Horizon-like WIT capability checks, isolation and fuel/memory budgets; native plugin dylibs remain trusted.
-- [ ] LuckPerms first: native context-sensitive permission nodes, inheritance, metadata, persistence and cache invalidation. Then build the Java LuckPerms API facade and test actual JAR loading (MIT).
-- [ ] EssentialsX: prefer running an unmodified Java JAR once Bukkit/Paper classloading and plugin.yml/paper-plugin.yml work. Test /home, /sethome, /warp, /spawn, /tpa, /msg, moderation, economy/Vault and persistence. Do not copy GPL source into Rust core without review.
+- [ ] Expose the built-in Rust permission service to native Rust/WASM and optional Java-compatible plugins; original LuckPerms JAR not required.
+- [ ] Expose native home/warp/utilities as first-party APIs; do not require an EssentialsX JAR. Optional original EssentialsX plugin compatibility must handle duplicate services and commands explicitly.
 - [ ] JVM IPC: registration, callback/response, task scheduling, command completers, permissions, classloaders, API binary compatibility matrix.
-Gate: version-pinned real EssentialsX and LuckPerms integration smoke suite passes; mere Java onEnable is insufficient.
+Gate: native built-ins remain active without plugins; optional Java plugins can access an API facade without replacing core implementations.
 
 ## 6 — Folia-style region scheduler [PLANNED]
 - [ ] Region ownership over nearby loaded chunks, owned entity state, 20TPS worker scheduler.
@@ -74,3 +95,12 @@ References: PurpurMC/Purpur; ludovic111/horizon; EssentialsX/Essentials; LuckPer
 Source implementation comparison and recommendation: docs/REFERENCE_ARCHITECTURE_RESEARCH_2026-10-23.md. Research confirmed Paper/Steel command-tree semantics, Steel generation-stage and queue designs, Folia region ownership, LuckPerms cache invalidation, Horizon WASM host budgets, and EssentialsX command reliance on Bukkit/Paper events.
 
 Initial baseline 16/16 tests; after C-01/C-02 the repository has 26 tests passing at the first implementation checkpoint. No real-world performance improvement or Java/Purpur behavioral parity has been established. Next unblocked work is C-03 or network status/login scaffolding; prioritize C-03 only if it does not delay a first real Horizon player connection.
+
+
+## 2026-10-23 native built-in pivot
+
+This supersedes the Java-first EssentialsX proposal in the earlier research report. No original EssentialsX/LuckPerms/SteelMC implementation has been copied. Baseline was 26 tests; native permission, persistence and utility tests raise it to 36 passing Rust tests. This is an initial data and console administrative milestone, NOT playable EssentialsX or full LuckPerms parity. Next: live no-JVM smoke and Horizon login/configuration, then wire native utility actions into actual player-owned world state.
+
+### Native core integration verification (2026-10-23)
+
+Full local Rust suite: 36/36 passing. Release build succeeded with warnings for future player APIs. Smoke-tested compiled executable from a separate temporary directory, empty plugin folder and Java bridge off: grants and home/warp data persisted over two processes. Deliberately malformed permissions.json correctly blocked restart without clearing user data. Real logged-in player commands, teleports, database scale benchmarks, GPL-derived source combinations and deployment source-offer delivery remain unverified/pending.

@@ -9,9 +9,14 @@ No implementation files from the named upstream projects are currently copied in
 | https://github.com/Steel-Foundation/SteelMC | AGPL-3.0-or-later | None (worldgen planned) |
 | https://github.com/LuckPerms/LuckPerms | MIT | None |
 | https://github.com/ferrumc-rs/ferrumc | MIT | None |
-| https://github.com/EssentialsX/Essentials | GPL v3 | None (optional Java integration planned) |
+| https://github.com/EssentialsX/Essentials | GPL v3 | None (native original implementation; optional Java compatibility) |
 | https://github.com/PaperMC/Folia | GPL v3 patches and inherited licenses | None (region scheduler design only) |
 
 Future source imports MUST add an immutable upstream commit SHA, exact imported paths and modifications, SPDX/copyright notice, source link and all transitive dependency/asset licenses before merging. Copy upstream's notice/LICENSE text as required. Do not imply this project authors own third-party source.
 
 External operator-installed Java JARs are not bundled and preserve their own copyrights/licenses.
+
+
+### New native persistence dependencies
+
+Serde and serde_json are first-party build dependencies for JSON persistence. Their package manifests state MIT OR Apache-2.0. Check Cargo.lock and transitive dependencies, generate an SBOM, and distribute notices/license texts before a public binary release. These crates are not from the EssentialsX or LuckPerms repositories.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+mod builtin;
 mod command;
 mod native;
 mod plugins;
@@ -22,16 +23,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bind = String::from("127.0.0.1:25565");
     let mut motd = String::from("Purpur-Horizon in Rust (experimental)");
     let mut plugins_dir = PathBuf::from("plugins");
+    let mut data_dir = PathBuf::from("data");
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--bind" => bind = args.next().ok_or("missing --bind value")?,
             "--motd" => motd = args.next().ok_or("missing --motd value")?,
+            "--data" => data_dir = PathBuf::from(args.next().ok_or("missing --data value")?),
             "--plugins" => {
                 plugins_dir = PathBuf::from(args.next().ok_or("missing --plugins value")?)
             }
             "--help" => {
-                println!("purpur-horizon --bind HOST:PORT --motd TEXT --plugins DIR\nPrototype: server-list status/ping only; no playable world yet.");
+                println!("purpur-horizon --bind HOST:PORT --motd TEXT --plugins DIR --data DIR\nPrototype: server-list status/ping only; no playable world yet.");
                 return Ok(());
             }
             _ => return Err(format!("unrecognized flag {arg}").into()),
@@ -48,8 +51,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plugins = plugins::Plugins::load(&plugins_dir);
     println!("{}", plugins.info());
     let mut commands = command::Registry::builtins();
+    builtin::register(&mut commands);
     plugins.register_commands(&mut commands);
-    let permissions = command::Grants::default();
+    // Always-on native services. Refuse corrupt persisted state rather than
+    // silently resetting access rules or player homes/warps.
+    let mut permissions =
+        builtin::permissions::NativePermissions::open(data_dir.join("permissions.json"))?;
+    let mut utilities = builtin::utilities::NativeUtilities::open(data_dir.join("utilities.json"))?;
+    println!("Native Rust permissions and utilities: enabled");
     let started = Instant::now();
     let (tx, rx) = mpsc::sync_channel(MAX_CONSOLE_COMMANDS_QUEUED);
     thread::spawn(move || {
@@ -95,6 +104,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match reply.effect {
                         command::Effect::None => {}
                         command::Effect::Stop => return Ok(()),
+                        command::Effect::Core { command, args } => {
+                            match builtin::dispatch(
+                                &command,
+                                &args,
+                                &mut permissions,
+                                &mut utilities,
+                            ) {
+                                Ok(message) => println!("{message}"),
+                                Err(error) => eprintln!("[native] {error}"),
+                            }
+                        }
                         command::Effect::Plugin {
                             owner,
                             command,
