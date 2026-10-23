@@ -4,11 +4,41 @@
 use crate::protocol::{self, Cursor};
 use std::{
     io::{self, ErrorKind},
+    net::TcpStream,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
+    time::{Duration, Instant},
 };
+/// One absolute pre-authentication deadline across every frame and byte.
+/// Ordinary SO_RCVTIMEO resets for each read; slow peers could otherwise
+/// occupy one handshake slot indefinitely by sending a byte just in time.
+pub struct DeadlineReader<'a> {
+    stream: &'a mut TcpStream,
+    deadline: Instant,
+}
+impl<'a> DeadlineReader<'a> {
+    pub fn new(stream: &'a mut TcpStream, deadline: Instant) -> Self {
+        Self { stream, deadline }
+    }
+}
+impl io::Read for DeadlineReader<'_> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        let remaining = self.deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::new(
+                ErrorKind::TimedOut,
+                "pre-authentication deadline expired",
+            ));
+        }
+        // A nonzero TCP timeout is required by the OS; deadline is checked
+        // again before each subsequent read.
+        self.stream
+            .set_read_timeout(Some(remaining.max(Duration::from_millis(1))))?;
+        io::Read::read(self.stream, out)
+    }
+}
 fn bad(detail: &'static str) -> io::Error {
     io::Error::new(ErrorKind::InvalidData, detail)
 }
@@ -184,6 +214,49 @@ mod tests {
         assert_eq!(c.varint().unwrap(), 0);
         assert_eq!(c.text(32767).unwrap(), r#"{"text":"Use Horizon \"26.3\""}"#);
         assert_eq!(c.remaining(), 0);
+    }
+    #[test]
+    fn expired_deadline_never_reads_available_bytes() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        use std::io::Write;
+        client.write_all(&[8]).unwrap();
+        let mut read = DeadlineReader::new(&mut server, Instant::now() - Duration::from_millis(1));
+        assert_eq!(
+            io::Read::read(&mut read, &mut [0]).unwrap_err().kind(),
+            ErrorKind::TimedOut
+        );
+    }
+    #[test]
+    fn slow_drip_has_global_deadline_not_per_byte_timeout() {
+        use std::io::Write;
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        let writer = std::thread::spawn(move || {
+            // A valid frame len 5, but the body arrives one byte every 250ms.
+            client.write_all(&[5]).unwrap();
+            for _ in 0..5 {
+                std::thread::sleep(Duration::from_millis(250));
+                if client.write_all(&[1]).is_err() {
+                    break;
+                }
+            }
+        });
+        let started = Instant::now();
+        let mut reader = DeadlineReader::new(&mut server, started + Duration::from_millis(430));
+        let error = protocol::frame_read_limited(&mut reader, 8).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            ErrorKind::TimedOut | ErrorKind::WouldBlock
+        ));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        drop(reader);
+        drop(server);
+        writer.join().unwrap();
     }
     #[test]
     fn connection_slots_released_on_return() {

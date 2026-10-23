@@ -5,6 +5,8 @@ use std::{
     io::Write,
     path::Path,
     process::{Child, Command, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 pub struct Plugins {
     #[cfg(unix)]
@@ -155,10 +157,26 @@ impl Drop for Plugins {
     fn drop(&mut self) {
         self.event(4, 0, "");
         if let Some(mut child) = self.java.take() {
-            if let Some(stdin) = &mut child.stdin {
-                let _ = writeln!(stdin, "STOP");
+            // EOF is the normal, non-blocking shutdown request for the bridge.
+            // A plugin can hang in onDisable; never hang the Rust server's Drop.
+            drop(child.stdin.take());
+            let deadline = Instant::now() + Duration::from_millis(1500);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) => break,
+                    Err(error) => {
+                        eprintln!("[java] bridge wait failed: {error}");
+                        break;
+                    }
+                    Ok(None) if Instant::now() >= deadline => {
+                        eprintln!("[java] bridge shutdown timed out; terminating child");
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break;
+                    }
+                    Ok(None) => thread::sleep(Duration::from_millis(15)),
+                }
             }
-            let _ = child.wait();
         }
     }
 }

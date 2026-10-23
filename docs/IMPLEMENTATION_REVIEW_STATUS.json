@@ -4,7 +4,7 @@
   "reviews": [
     {
       "id": "REV-NET",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/network.rs",
         "src/protocol.rs"
@@ -17,7 +17,13 @@
         "networking specialists as applicable"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "current_sha256": {
+        "src/network.rs": "54c2ea4deebdcc5fb02bea9877906a0bf04a1500011366b0784f04e085fb6c6e",
+        "src/protocol.rs": "31acce580f5e8e58341eb42fae96d136c13d05de4a17e68cf9b03543d1fea628"
+      },
+      "test_evidence_partial": "51 Rust tests, plugin lifecycle smoke, slow-drip TCP tests; full approval criteria not yet met.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md targeted pre/post review"
     },
     {
       "id": "REV-STATUS",
@@ -95,7 +101,7 @@
     },
     {
       "id": "REV-PLUG",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/native.rs",
         "src/plugins.rs",
@@ -109,7 +115,14 @@
         "LuckPerms"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "current_sha256": {
+        "src/native.rs": "a112f4bcf4cc75b37ff4e76bbaca2fbf6a664e440533112a33539a4774dbaa99",
+        "src/plugins.rs": "e653468387244e249d44e8cf95f67cd94149e961d5c0a438c4e9fb99551df4e8",
+        "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276"
+      },
+      "test_evidence_partial": "51 Rust tests, plugin lifecycle smoke, slow-drip TCP tests; full approval criteria not yet met.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md targeted pre/post review"
     },
     {
       "id": "REV-TICK",

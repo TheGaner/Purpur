@@ -21,6 +21,19 @@ unsafe extern "C" {
 #[cfg(unix)]
 type OnEvent = unsafe extern "C" fn(u32, u64, *const c_char) -> i32;
 #[cfg(unix)]
+const MAX_COMMAND_MANIFEST_BYTES: usize = 8192;
+
+/// Decode a versioned, length-delimited, caller-owned command manifest.
+/// A trusted .so can still corrupt memory; no native-library sandbox implied.
+#[cfg(unix)]
+fn decode_manifest(bytes: &[u8], used: usize) -> Option<String> {
+    if used == 0 || used > bytes.len() || bytes[..used].contains(&0) {
+        return None;
+    }
+    std::str::from_utf8(&bytes[..used]).ok().map(str::to_owned)
+}
+
+#[cfg(unix)]
 pub struct Plugin {
     handle: *mut c_void,
     callback: OnEvent,
@@ -66,24 +79,21 @@ impl Plugin {
         }
     }
     pub fn declared_commands(&self) -> Option<String> {
-        // Optional ABI extension: exported static UTF-8 C string, newline-
-        // separated name|permission|alias1,alias2 definitions.
-        // Native plugins are trusted; they can crash the host regardless.
+        // Manifest ABI v2: host owns a fixed-sized writable byte buffer.
+        // fn horizon_plugin_commands_v2(out: *mut u8, capacity: usize) -> usize
+        // v1 pointer-returning export is deliberately unsupported: it could
+        // perform an unbounded NUL scan before validating the buffer length.
+        // Event/lifecycle ABI v1 remains unchanged.
         unsafe {
-            let symbol = dlsym(self.handle, c"horizon_plugin_commands".as_ptr());
+            let symbol = dlsym(self.handle, c"horizon_plugin_commands_v2".as_ptr());
             if symbol.is_null() {
                 return None;
             }
-            let func: unsafe extern "C" fn() -> *const c_char = std::mem::transmute(symbol);
-            let ptr = func();
-            if ptr.is_null() {
-                return None;
-            }
-            let bytes = CStr::from_ptr(ptr).to_bytes();
-            if bytes.len() > 8192 {
-                return None;
-            }
-            String::from_utf8(bytes.to_vec()).ok()
+            let function: unsafe extern "C" fn(*mut u8, usize) -> usize =
+                std::mem::transmute(symbol);
+            let mut output = [0u8; MAX_COMMAND_MANIFEST_BYTES];
+            let used = function(output.as_mut_ptr(), output.len());
+            decode_manifest(&output, used)
         }
     }
     pub fn event(&self, code: u32, tick: u64, payload: &str) {
@@ -100,5 +110,36 @@ impl Drop for Plugin {
         unsafe {
             dlclose(self.handle);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    #[test]
+    fn manifest_v2_bounds_utf8_and_binary_validation() {
+        let data = b"hello|example.hello|hi";
+        assert_eq!(
+            decode_manifest(data, data.len()).as_deref(),
+            Some("hello|example.hello|hi")
+        );
+        assert_eq!(decode_manifest(data, 0), None);
+        assert_eq!(decode_manifest(data, data.len() + 1), None);
+        assert_eq!(decode_manifest(b"hello\0invalid", 13), None);
+        assert_eq!(decode_manifest(&[255], 1), None);
+        assert_eq!(
+            decode_manifest(
+                &vec![b'x'; MAX_COMMAND_MANIFEST_BYTES],
+                MAX_COMMAND_MANIFEST_BYTES
+            )
+            .unwrap()
+            .len(),
+            MAX_COMMAND_MANIFEST_BYTES
+        );
+        assert!(decode_manifest(
+            &vec![b'x'; MAX_COMMAND_MANIFEST_BYTES],
+            MAX_COMMAND_MANIFEST_BYTES + 1
+        )
+        .is_none());
     }
 }

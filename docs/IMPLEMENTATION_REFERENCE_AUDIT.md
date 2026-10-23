@@ -70,3 +70,50 @@ To approve any row: record specific source-file references and versions, alterna
 ### Resume priority
 
 Retrospective source comparison and critical correctness/security remediation, in this order: REV-PLUG unsafe metadata API; REV-NET connection/handshake deadlines; REV-PERM identity and semantics; REV-STORAGE atomicity; REV-CMD and REV-TICK. Maintain the user requirement that native EssentialsX/LuckPerms-like services ship within Rust without mandatory Java JARs. No major new feature until retrospective review gate is cleared.
+
+
+## REV-PLUG targeted pre-implementation review — 2026-10-23
+
+Scope: src/native.rs, examples/rust-plugin/src/lib.rs, src/plugins.rs and trusted Rust native plugin manifest metadata (including bounded Java sidecar shutdown). This is focused security remediation, not full plugin API approval.
+
+Source-grounded alternatives: Horizon e325fa6 crates/horizon-mods/src/runtime.rs uses Wasmtime component memory/fuel/host quotas, avoiding direct host dereference of untrusted module pointers. Paper plugin.yml and plugin lifecycle docs require JVM JavaPlugin entry points/classloaders; they are not a native C ABI. FerrumC 51830e9 src/lib/plugins/src/lib.rs is a placeholder add-function example, so is not a production ABI source. SteelMC dc8eaba steel-core/src/command/mod.rs uses a structured command registry, not a native pointer metadata API. Folia is relevant for future plugin thread ownership, not manifest byte buffer. EssentialsX/LuckPerms require Java APIs and do not solve this native ABI. Krypton/e4mc/PulseNet are transport-specific and inapplicable here.
+
+Known fault: host CStr::from_ptr returned by optional horizon_plugin_commands() scans for NUL before checking 8192 bytes; no length bound on dereference. Alternatives: (A) scan only up to max but still trust a foreign pointer, (B) return pointer plus length and still dereference foreign data, (C) selected optional horizon_plugin_commands_v2(buf:*mut u8,cap:usize)->usize with host-owned output buffer (8192 bytes), explicit returned length and UTF-8 validation. Event callback ABI v1 remains. Old command-manifest v1 symbol is ignored (legacy plugin can load but does not register its command), a documented compatibility change. Host-owned bytes remove this specific blind scan; native dylibs remain fully privileged and not sandboxed.
+
+Java child process: blocking Child::wait after STOP can hang if onDisable misbehaves. Choose graceful closing of stdin to send EOF, a short try_wait grace period, then kill and reap, over either indefinite wait or unconditional termination. Cross-process STOP delivery and subprocess ownership are tested separately.
+
+Verification plan: buffer length/UTF-8/binary/zero-length tests, real Rust plugin command dispatch with v2, absent v2 legacy no-command behavior, separate Java normal lifecycle plus intentionally hung onDisable termination, all prior Rust tests, rustfmt, release, standalone smoke. Original AGPL Rust changes; no copied upstream code. This is not performance benchmarking. Roll back the scoped patch on regression.
+
+Primary references:
+- https://github.com/ludovic111/horizon/blob/e325fa65878071d5c9076e908e9a4adb258b3313/crates/horizon-mods/src/runtime.rs
+- https://docs.papermc.io/paper/dev/how-do-plugins-work/
+- https://docs.papermc.io/paper/dev/plugin-yml/
+- https://github.com/ferrumc-rs/ferrumc/blob/51830e99675deae1f6cdbb62bf5d32b3d25c1c76/src/lib/plugins/src/lib.rs
+- https://github.com/Steel-Foundation/SteelMC/blob/dc8eaba7ff21c348226a05741c2fb9809a8ca90d/steel-core/src/command/mod.rs
+
+
+## REV-NET scoped pre-implementation review — total pre-authentication deadline (2026-10-23)
+
+Scope: src/network.rs and pre-auth packet reads in src/main.rs. Current behavior sets a 3-second socket read timeout once; each new successful single-byte read restarts the operating system wait. A peer can slowly transmit a valid frame over much longer than three seconds and hold a bounded but valuable worker slot.
+
+Primary implementation references: FerrumC 51830e9 src/lib/net/src/connection.rs declares MAX_HANDSHAKE_TIMEOUT=10 seconds and wraps handshake with tokio::time::timeout; the returned deadline covers the handshake future, unlike per-byte waits. Horizon e325fa6 crates/horizon-protocol/src/connection.rs separates stream packet reads and uses timeout-aware TCP/in-memory streams; its individual Pipe.read timeout should not be mistaken for a global connection admission budget. SteelMC's bounded command queue provides an analogous resource-budget pattern but no direct pre-auth socket deadline. Paper/Purpur and Folia are semantically relevant to handshake correctness and thread ownership, respectively, but not this blocking Rust TCP timeout implementation. Krypton/e4mc/PulseNet packet batching is not relevant to a slow-drip handshake and no source is copied.
+
+Alternatives: migrate entire proof-of-concept to Tokio (complex, inappropriate for a 48/49-test pre-playable server), force a fixed timeout per read (current exploitable behavior), or wrap TCP Read calls with a single monotonic deadline and recompute remaining SO_RCVTIMEO per read. Chosen: small deadline-aware Reader adapter, one absolute deadline shared across handshake, status, optional ping and login hello, retaining existing framing/resource limits and blocking thread model. The loop refuses further reads once expired, even when a client sends a byte before every old per-read timeout. This is a bounded admission improvement, not a cryptographic authentication implementation or proof of high-throughput network resilience.
+
+Acceptance: deterministic deadline-expired unit check, real TCP slow-drip test, unchanged status/login regression tests, all Rust suite, release build, reproducible status performance sanity. Work remains on total write deadlines, cancellation, per-IP admission, reactor transport and authenticated Horizon-only negotiation. First-party AGPL changes, no upstream code imported.
+
+
+## 2026-10-23 targeted remediation verification — REV-PLUG and REV-NET
+
+**Implementation and outcomes**
+- REV-PLUG: optional native manifest export moved from pointer-to-NUL (v1 manifest) to caller-owned buffer plus reported length (v2). The host checks 0 < length <= 8192, embedded NUL and UTF-8 before converting to a Rust String; legacy v1 manifest symbols are no longer consumed, but core native event ABI v1 is unchanged. Original AGPL source only; no imported upstream implementation. Evidence: src/native.rs, examples/rust-plugin/src/lib.rs, native::tests::manifest_v2_bounds_utf8_and_binary_validation.
+- REV-PLUG: Java bridge stdin is dropped to send EOF, granting 1.5 seconds for the child to disable plugins before termination. Evidence: src/plugins.rs and scripts/test_plugin_lifecycle.py. The fixture compiling a real Java 21 JAR completed normal shutdown and enabled/disabled; a deliberately hanging onDisable was terminated after its grace interval (observed end-to-end elapsed 3.77 seconds, including deliberate initialization sleep).
+- REV-NET: all preauth read operations now share one three-second absolute monotonic deadline, recalculating socket timeout per Read call. Against a slow drip client sending one frame body byte every 250ms, the 430ms test deadline rejected before full frame ingestion. Evidence: src/network.rs DeadlineReader, src/main.rs serve, tests expired_deadline_never_reads_available_bytes and slow_drip_has_global_deadline_not_per_byte_timeout. This is source-inspired by FerrumC's whole-handshake future timeout; it is not a full asynchronous transport port.
+
+**Actual verification**: cargo +1.90.0 test --all-targets passed 51/51 tests (48 original + 3 new tests), cargo +1.90.0 fmt --all -- --check passed, both server and sample native Rust plugin release builds passed. python3 scripts/test_plugin_lifecycle.py passed normal and hung JAR fixtures. python3 scripts/reference_review_gate.py --check passed with zero uncovered source files. The legacy native manifest is intentionally incompatible for command registration; it must be rebuilt to ABI v2. The Java and native lifecycle engine are still experimental, not full Bukkit compatibility or a native security sandbox.
+
+**Performance retest, status-only**: python3 scripts/bench_status.py target/release/purpur-horizon, localhost sequential 120 plus 240 requests at eight-way concurrency, recorded two independent current runs: sequential p50 0.346ms then 0.129ms; concurrent p95 2.062ms then 1.787ms. Earlier accepted optimized build reported sequential p50 0.117-0.128ms and concurrent p95 1.522-1.750ms. Large variance on the same host indicates scheduling/background-load sensitivity. No throughput gain or global fastest claim. No real Horizon client, authentication, gameplay TPS or stress benchmark completed.
+
+**Remaining work and gate status**: REV-PLUG IN_REVIEW: untrusted native DLLs still execute arbitrary code; manifest writer can corrupt caller memory if malicious; Java Bukkit/Paper APIs, WIT sandbox migration, Java process-tree control, plugin scheduler ordering, and a complete ABI conformance suite remain. REV-NET IN_REVIEW: no actual Horizon login, full write-side deadlines, total transaction/accounting limits, per-IP concurrency, shutdown cancellation, fuzz corpus or large-scale traffic evidence. Both stay unapproved. RETROSPECTIVE REVIEW HOLD REMAINS ACTIVE.
+
+**Compared implementation options after patch**: Horizon WIT/Wasmtime is preferable for untrusted plugins when implemented; the host-owned manifest buffer is a small improvement only to the explicitly trusted native extension proof of concept. FerrumC's Tokio timeout wraps whole handshake futures; our small blocking reader provides similar total-read-window semantics without bringing the unneeded async dependency into the pre-playable server. Full transition to async reactor needs measured player traffic and packet correctness.

@@ -60,3 +60,20 @@ W-01: integrate pinned SteelMC world-generation behavior with version-aligned as
 ## Verification evidence
 
 All 48 Rust tests pass at this checkpoint; rustfmt and release build passed. The prototype's original native permissions and utilities tests remain included. No actual Horizon play connection, production traffic, broad fuzz corpus, world-generation parity or live player TPS test was executed.
+
+### 2026-10-23 follow-up: slow-drip total read deadline
+
+A shared absolute three-second deadline now bounds every preauth read,
+including partial VarInts, handshake, login hello, status and optional ping.
+Previous per-read SO_RCVTIMEO could be refreshed indefinitely by a peer
+transmitting just ahead of each timeout. Rust source comparison: FerrumC's
+MAX_HANDSHAKE_TIMEOUT wraps the handshake Future via Tokio; Horizon's
+connection.rs exposes timeout-aware packet transport but a socket read
+timeout alone is not necessarily an overall admission deadline. The Rust
+implementation uses a minimal Read adapter and retains the existing
+bounded worker pool. Added slow-drip and expired-deadline regressions.
+
+Two post-fix localhost status-only samples: sequential p50 0.346ms/0.129ms,
+8-way concurrent p95 2.062ms/1.787ms. Scheduling jitter is significant;
+do not claim a new performance win. Total write deadlines, cancellation
+and reactor/load benchmarks remain deferred.

@@ -53,12 +53,20 @@ a hardcoded command switch. Current built-ins are help, stop, version, plugins,
 uptime, tps (target only) and echo. Try: help, help echo, echo "hello world",
 hi (from the compiled example plugin), and stop.
 
-The optional trusted Rust ABI export horizon_plugin_commands returns a static
-UTF-8 C string with lines in this shape:
+For native command declarations, use the optional manifest ABI v2:
+horizon_plugin_commands_v2(out: *mut u8, capacity: usize) -> usize.
+The native plugin writes at most capacity bytes into the caller-owned
+buffer and returns the actual byte length. The server caps it at 8192 bytes,
+validates UTF-8 and rejects NUL bytes. No null terminator is needed.
+The payload remains newline-separated, with lines in this shape:
 
     hello|example.hello|hi
 
-A line declares command name, permission node, comma-delimited aliases.
+Each line declares command name, permission node and comma-delimited aliases.
+The old pointer-returning horizon_plugin_commands v1 symbol is deliberately
+ignored to eliminate a metadata read with no bound; native plugins using it
+can still load and receive lifecycle events, but must be rebuilt to register
+commands. Native dylibs have full process privileges and are not sandboxed.
 Plugin execution uses the existing event callback (event 3). No world/player
 commands or runtime Java plugin command registration are implemented yet.
 Player permissions are fail-closed and an in-memory contextual/group permission
@@ -89,3 +97,16 @@ Homes and warps currently store and report coordinates; teleport is blocked unti
 Network acceptance is independent of the 20Hz game loop. Active handshakes are bounded by --max-connections N (default 64), and each preauth packet family is limited before payload allocation. The protocol 777 login hello is parsed, but the server still explicitly rejects all player admission: there is no authentication or playable world.
 
 Run python3 scripts/bench_status.py target/release/purpur-horizon to measure localhost server-list status requests. Sequential median RTT improved from roughly 50ms to roughly 0.12ms in the recorded test, not a TPS benchmark. See docs/NETWORK_OPTIMIZATION_2026-10-23.md for methods, p95/p99, restrictions and remaining priorities.
+
+## Retrospective security review (ongoing)
+
+The optional Java bridge is shut down by closing stdin, waiting up to 1.5
+seconds for clean disable, and terminating the child if it hangs. Preauth
+protocol reads share a three-second monotonic deadline so a slow client
+cannot indefinitely reset socket timeouts one byte at a time.
+
+To run the full native/JVM regression, after building release server and
+example plugin, run python3 scripts/test_plugin_lifecycle.py. The complete
+cross-server retrospective audit remains open: see
+docs/IMPLEMENTATION_REFERENCE_AUDIT.md and docs/ROADMAP.md Phase -1.
+No full Bukkit compatibility, Horizon-only authentication or gameplay yet.

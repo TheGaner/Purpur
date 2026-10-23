@@ -13,12 +13,14 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [x] RV-00: Locate existing roadmap, pin current HEAD, inventory all current Rust source areas, run 48/48 Rust regressions and formatting, identify existing architecture reports as preliminary evidence.
 - [x] RV-01: Establish mandatory pre-/post-implementation reference-review procedure, comparison scope, licensing/benchmark policy, retrospective review ledger, and staleness checks. See [review and reference audit](IMPLEMENTATION_REFERENCE_AUDIT.md).
 - [ ] RV-NET: Verify prior protocol/network choices against Horizon 26.3, SteelMC, FerrumC, Paper/Purpur, and applicable networking implementations; review deadlines, auth, memory, concurrency, p95/p99, fairness.
+  - [x] RV-NET-01: Cross-reference FerrumC whole-handshake timeout and Horizon connection semantics; replace per-read timeout loophole with absolute preauth deadline and slow-drip regression; wider REV-NET still IN_REVIEW.
 - [ ] RV-STATUS: Verify status/ping response framing, version behavior, limits and dynamic future semantics against Horizon and Paper/Purpur.
 - [ ] RV-CMD: Differentially audit command tree, argument parsing, suggestions and permissions against Paper/Purpur Brigadier, SteelMC, FerrumC and LuckPerms.
 - [ ] RV-PERM: Compare native Rust permissions to LuckPerms calculator, graph, contexts, cache and persistence, plus relevant SteelMC/Paper semantics.
 - [ ] RV-UTIL: Compare homes/warps and planned player actions against EssentialsX, Bukkit/Paper, and Folia owner-affine teleport.
 - [ ] RV-STORAGE: Audit JSON persistence durability and scaling against LuckPerms/EssentialsX and SteelMC/FerrumC before choosing a database design.
 - [ ] RV-PLUG: Audit native ABI safety, plugin lifecycle and Java bridge against Horizon Wasmtime, Paper/Purpur/Folia and upstream plugin needs; fix unsafe metadata pointer scan and potential blocking shutdown.
+  - [x] RV-PLUG-01: Compare Horizon Wasmtime, Paper Java lifecycle, FerrumC stub and SteelMC command API; remove unbounded native manifest pointer scan with host-owned v2 buffer and cap Java child shutdown, unit/runtime fixtures; wider REV-PLUG still IN_REVIEW.
 - [ ] RV-TICK: Audit command work budgets, tick behavior and future ownership against Folia/Paper and SteelMC.
 - [ ] RV-LEGAL: Complete per-dependency SPDX/license inventory, notices, generated assets, copied-source policy and distribution/source offer.
 - [ ] RV-CLOSE: All retrospective rows APPROVED with current source digests, named source-code citations, reproducible verification and decision records. The review gate must pass; only then unfreeze new feature work.
@@ -138,3 +140,7 @@ Full local Rust suite: 36/36 passing. Release build succeeded with warnings for 
 ## 2026-10-23 network optimization checkpoint
 
 Full investigation, measured results and source constraints: docs/NETWORK_OPTIMIZATION_2026-10-23.md. On a localhost status-only workload, sequential p50 fell from 49.996ms to 0.117–0.128ms, and 8-way concurrent p95 from 50.506ms to 1.522–1.750ms after moving socket acceptance off the 20Hz simulation tick. These numbers are not gameplay/TPS claims; background builds and limited samples prevent production conclusions. 48 Rust tests pass, with no external source copied. Horizon auth/configuration and real play remain blocking milestones.
+
+## 2026-10-23 retrospective remediation checkpoint
+
+REV-PLUG and REV-NET are IN_REVIEW, NOT APPROVED. Targeted unsafe native manifest pointer-read and hanging Java process fixes, plus deadline-aware preauthentication reads, passed 51/51 Rust tests, release builds, normal/hung Java fixture lifecycle and two repeated status-only benchmarks. New v2 native manifest ABI requires recompiling existing native plugin examples; v1 event hooks remain. Reference comparison, source hash and outstanding risk evidence are in docs/IMPLEMENTATION_REFERENCE_AUDIT.md. The Phase -1 hold against unrelated feature development remains in force.

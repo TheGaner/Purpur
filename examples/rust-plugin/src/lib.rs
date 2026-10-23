@@ -12,7 +12,12 @@ use std::{ffi::CStr,os::raw::c_char};
  }0
 }
 
+/// Optional host-owned-buffer command manifest ABI v2. The event ABI stays v1.
+/// Return the byte count, never a pointer; do not write beyond capacity.
 #[no_mangle]
-pub extern "C" fn horizon_plugin_commands() -> *const c_char {
-    c"hello|example.hello|hi".as_ptr()
+pub unsafe extern "C" fn horizon_plugin_commands_v2(out:*mut u8,capacity:usize)->usize{
+    const DATA:&[u8]=b"hello|example.hello|hi";
+    if out.is_null() || capacity < DATA.len(){return DATA.len();}
+    std::ptr::copy_nonoverlapping(DATA.as_ptr(),out,DATA.len());
+    DATA.len()
 }

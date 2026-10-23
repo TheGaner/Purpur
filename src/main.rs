@@ -194,15 +194,20 @@ fn make_status_response(motd: &str) -> Vec<u8> {
 }
 fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
     use protocol::*;
-    socket.set_read_timeout(Some(Duration::from_secs(3)))?;
+    // One total admission window shared by all preauth protocol states.
+    let deadline = Instant::now() + Duration::from_secs(3);
     socket.set_write_timeout(Some(Duration::from_secs(3)))?;
     // 255-char hostname (worst-case 3-byte UTF-8), packet ID, version,
     // port and next-state VarInts fit under 1024 bytes.
-    let hs = frame_read_limited(&mut socket, 1024)?;
+    let hs = frame_read_limited(
+        &mut network::DeadlineReader::new(&mut socket, deadline),
+        1024,
+    )?;
     let intention = network::parse_intention(&hs)?;
     match intention.state {
         network::State::Status => {
-            let req = frame_read_limited(&mut socket, 1)?;
+            let req =
+                frame_read_limited(&mut network::DeadlineReader::new(&mut socket, deadline), 1)?;
             if req != [0] {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -210,7 +215,9 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
                 ));
             }
             socket.write_all(status_reply)?;
-            if let Ok(ping) = frame_read_limited(&mut socket, 9) {
+            if let Ok(ping) =
+                frame_read_limited(&mut network::DeadlineReader::new(&mut socket, deadline), 9)
+            {
                 if ping.len() == 9 && ping[0] == 1 {
                     frame_write(&mut socket, &ping)?;
                 }
@@ -231,7 +238,8 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
             // Parse the real protocol-777 login hello, including client-provided
             // UUID, but do NOT accept, authenticate, or store that identity yet.
             // Login hello ID + 16-char name + 16-byte UUID.
-            let hello_packet = frame_read_limited(&mut socket, 64)?;
+            let hello_packet =
+                frame_read_limited(&mut network::DeadlineReader::new(&mut socket, deadline), 64)?;
             let hello = network::parse_login_hello(&hello_packet);
             let reason = if hello.is_err() {
                 "Invalid login hello for Minecraft 26.3".to_owned()
