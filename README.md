@@ -250,3 +250,14 @@ stalled send cannot restart a fresh three-second window. Real-TCP tests
 exercise expired, successful framed and blocked-receiver writes. These
 limits do not constitute authentication, a per-IP admission quota, or
 guaranteed real-time process cancellation.
+
+
+### Review-source drift detection
+
+The mandatory Phase -1 coverage check now validates current SHA256 content
+digests for all Rust, Java and Python source files owned by in-review or
+approved subsystems. It rejects a changed file or missing hash until an
+updated reviewed digest and evidence are recorded in the existing ledger.
+A pending review can remain pending without digests. This is not an
+approval mechanism: --enforce still requires full upstream comparison,
+testing and sign-off for every subsystem.

@@ -5,8 +5,8 @@ Usage:
   python3 scripts/reference_review_gate.py --check
   python3 scripts/reference_review_gate.py --enforce
 
---check only validates structure and complete source coverage; it NEVER
-certifies correctness, parity, licensing or performance.
+--check validates inventory coverage and current source digests for reviews
+already in progress. It NEVER certifies correctness, parity, or licensing.
 --enforce requires evidence-backed approval and current file digests for every
 retrospective review item. Until that happens it MUST fail intentionally.
 """
@@ -63,6 +63,14 @@ def run(enforce: bool) -> int:
         if not isinstance(hashes, dict):
             problems.append(f"{name}: approved_sha256 must be a map")
             hashes = {}
+        current = entry.get("current_sha256", {})
+        if status in ("in_review", "approved") and not isinstance(current, dict):
+            problems.append(f"{name}: current_sha256 must be a map")
+            current = {}
+        if status in ("in_review", "approved"):
+            extras = sorted(set(current) - set(paths))
+            if extras:
+                problems.append(f"{name}: hashes for unowned paths: {extras}")
         for path in paths:
             if not isinstance(path, str) or path.startswith("/") or ".." in Path(path).parts:
                 problems.append(f"{name}: invalid or unsafe path {path!r}")
@@ -71,7 +79,10 @@ def run(enforce: bool) -> int:
             if not f.is_file():
                 problems.append(f"{name}: missing file {path}")
             covered.add(path)
-            if status == "approved" and hashes.get(path) != sha256(f):
+            if f.is_file() and status in ("in_review", "approved"):
+                if current.get(path) != sha256(f):
+                    problems.append(f"{name}: missing/stale current sha256 for {path}")
+            if f.is_file() and status == "approved" and hashes.get(path) != sha256(f):
                 problems.append(f"{name}: missing/stale approved sha256 for {path}")
         if status == "approved":
             for prop in ("upstream_code_refs", "alternatives", "test_evidence", "decision"):

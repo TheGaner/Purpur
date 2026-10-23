@@ -187,7 +187,8 @@
         "THIRD_PARTY_NOTICES.md",
         "scripts/reference_review_gate.py",
         "scripts/check_cargo_licenses.py",
-        "scripts/test_cargo_licenses.py"
+        "scripts/test_cargo_licenses.py",
+        "scripts/test_reference_review_gate.py"
       ],
       "references": [
         "Purpur",
@@ -200,16 +201,17 @@
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
-      "test_evidence_partial": "11 exact locked registry crate metadata/checksums verified; three Python drift tests; Rust 74-test suite unchanged. Per-file notices and distribution audit pending.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-LEGAL-01 pinned upstream license comparison and Cargo offline manifest drift contract",
+      "test_evidence_partial": "11 locked Cargo crates; six Python tests (3 Cargo license drift, 3 in-review source hash drift); 77 Rust tests; complete audit still unapproved.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-LEGAL-01 and RV-LEGAL-02 pre/post reviews; exact Cargo metadata and fail-closed in-review source SHA check",
       "current_sha256": {
         "LICENSE": "be45e9d4f9634f68d03edca8368c5be482b87bf9c15db0089497595abb026f6e",
         "Cargo.toml": "a493d1cff94b0d684a40911b48abb5f42565832a06272e49be46609a25422bcd",
         "Cargo.lock": "ce2f463496122abd820a342e1f7a3b986ab3e0370b9626fde52286da20690138",
         "THIRD_PARTY_NOTICES.md": "d48d721a177384970bbc4d975aa529bf9dd69d43293263e8aebf94696568e606",
-        "scripts/reference_review_gate.py": "d1cd1da975b99597f6d599dc947cdcb56de023733eba3539efe1f90bbda0d0f6",
+        "scripts/reference_review_gate.py": "b838b37c05d773381e3885c223577e7c4cc38ee7e921d50581ced5fbde8e0f1a",
         "scripts/check_cargo_licenses.py": "d2ad05f3aa2dc810e608c77c0a09a8b7a97cf82dc45507b511c630f063718ca0",
-        "scripts/test_cargo_licenses.py": "db5aa5b3fc04a13d81adafb69f6c522e6325318d3de043e151c10409a30b16e7"
+        "scripts/test_cargo_licenses.py": "db5aa5b3fc04a13d81adafb69f6c522e6325318d3de043e151c10409a30b16e7",
+        "scripts/test_reference_review_gate.py": "0f1a62e636dd5f1af0ea3b6d5a196ad877ebdfa82611ec3c137f3c2b1d2f52d3"
       }
     }
   ]
