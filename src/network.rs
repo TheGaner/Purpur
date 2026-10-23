@@ -3,12 +3,10 @@
 //! A valid login hello is NOT authenticated and MUST NOT be admitted as a player.
 use crate::protocol::{self, Cursor};
 use std::{
+    collections::HashMap,
     io::{self, ErrorKind},
-    net::TcpStream,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    net::{IpAddr, TcpStream},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 /// One absolute pre-authentication deadline across every frame and byte.
@@ -142,35 +140,66 @@ pub fn login_disconnect(text: &str) -> Vec<u8> {
     );
     packet
 }
-/// Refcounted connection-slot permit. Admission is atomic, bounded, and
-/// released on all worker returns, including errors and panics.
+/// RAII admission limits both total preauth workers and per-TCP-source
+/// occupancy. Tracking ends with the last live permit; no per-IP history.
 pub struct Slots {
-    used: AtomicUsize,
+    state: Mutex<SlotState>,
     limit: usize,
+    per_ip_limit: usize,
 }
-pub struct Permit(Arc<Slots>);
+#[derive(Default)]
+struct SlotState {
+    used: usize,
+    per_ip: HashMap<IpAddr, usize>,
+}
+pub struct Permit {
+    slots: Arc<Slots>,
+    ip: IpAddr,
+}
+fn canonical_peer(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => v6.to_ipv4_mapped().map(IpAddr::V4).unwrap_or(ip),
+        _ => ip,
+    }
+}
 impl Slots {
-    pub fn new(limit: usize) -> Arc<Self> {
+    pub fn new(limit: usize, per_ip_limit: usize) -> Arc<Self> {
+        assert!(limit > 0 && per_ip_limit > 0);
         Arc::new(Self {
-            used: AtomicUsize::new(0),
+            state: Mutex::new(SlotState::default()),
             limit,
+            per_ip_limit,
         })
     }
-    pub fn enter(self: &Arc<Self>) -> Option<Permit> {
-        self.used
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
-                (old < self.limit).then_some(old + 1)
-            })
-            .ok()
-            .map(|_| Permit(self.clone()))
+    /// Peer IP comes from TcpListener::accept, never a handshake hostname.
+    pub fn enter(self: &Arc<Self>, source: IpAddr) -> Option<Permit> {
+        let ip = canonical_peer(source);
+        let mut state = self.state.lock().unwrap();
+        if state.used >= self.limit
+            || state.per_ip.get(&ip).copied().unwrap_or_default() >= self.per_ip_limit
+        {
+            return None;
+        }
+        state.used += 1;
+        *state.per_ip.entry(ip).or_insert(0) += 1;
+        Some(Permit {
+            slots: self.clone(),
+            ip,
+        })
     }
     pub fn used(&self) -> usize {
-        self.used.load(Ordering::Acquire)
+        self.state.lock().unwrap().used
     }
 }
 impl Drop for Permit {
     fn drop(&mut self) {
-        self.0.used.fetch_sub(1, Ordering::AcqRel);
+        let mut state = self.slots.state.lock().unwrap();
+        state.used -= 1;
+        let peers = state.per_ip.get_mut(&self.ip).expect("permit peer tracked");
+        *peers -= 1;
+        if *peers == 0 {
+            state.per_ip.remove(&self.ip);
+        }
     }
 }
 #[cfg(test)]
@@ -346,14 +375,15 @@ mod tests {
     }
     #[test]
     fn connection_slots_released_on_return() {
-        let slots = Slots::new(2);
-        let a = slots.enter().unwrap();
-        let b = slots.enter().unwrap();
-        assert!(slots.enter().is_none());
+        let slots = Slots::new(2, 2);
+        let peer: IpAddr = "192.0.2.1".parse().unwrap();
+        let a = slots.enter(peer).unwrap();
+        let b = slots.enter(peer).unwrap();
+        assert!(slots.enter(peer).is_none());
         assert_eq!(slots.used(), 2);
         drop(a);
         assert_eq!(slots.used(), 1);
-        let c = slots.enter().unwrap();
+        let c = slots.enter(peer).unwrap();
         drop(b);
         drop(c);
         assert_eq!(slots.used(), 0);
@@ -362,7 +392,7 @@ mod tests {
     fn admission_across_threads_never_exceeds_limit() {
         use std::sync::{Barrier, Mutex};
         use std::thread;
-        let slots = Slots::new(4);
+        let slots = Slots::new(4, 2);
         let start = Arc::new(Barrier::new(16));
         let release = Arc::new(Barrier::new(16));
         let held = Arc::new(Mutex::new(Vec::new()));
@@ -371,7 +401,8 @@ mod tests {
                 let (s, b, e, h) = (slots.clone(), start.clone(), release.clone(), held.clone());
                 thread::spawn(move || {
                     b.wait();
-                    let permit = s.enter();
+                    let peer = "192.0.2.1".parse().unwrap();
+                    let permit = s.enter(peer);
                     if permit.is_some() {
                         h.lock().unwrap().push(1);
                     }
@@ -383,7 +414,48 @@ mod tests {
         for h in handles {
             let _ = h.join().unwrap();
         }
-        assert!(held.lock().unwrap().len() <= 4);
+        assert!(held.lock().unwrap().len() <= 2);
         assert_eq!(slots.used(), 0);
+    }
+    #[test]
+    fn per_ip_limit_preserves_other_peer_and_recovers() {
+        let slots = Slots::new(3, 1);
+        let a: IpAddr = "192.0.2.1".parse().unwrap();
+        let b: IpAddr = "192.0.2.2".parse().unwrap();
+        let c: IpAddr = "2001:db8::3".parse().unwrap();
+        let first = slots.enter(a).unwrap();
+        assert!(slots.enter(a).is_none());
+        let second = slots.enter(b).expect("other source retains capacity");
+        let third = slots.enter(c).expect("global slot 3 available");
+        assert_eq!(slots.used(), 3);
+        assert!(slots.enter("2001:db8::4".parse().unwrap()).is_none());
+        drop(first);
+        assert!(slots.enter(a).is_some());
+        drop(second);
+        drop(third);
+        assert_eq!(slots.used(), 0);
+    }
+    #[test]
+    fn ipv4_mapped_ipv6_cannot_bypass_per_ip_quota() {
+        let slots = Slots::new(3, 1);
+        let ipv4: IpAddr = "192.0.2.40".parse().unwrap();
+        let mapped: IpAddr = "::ffff:192.0.2.40".parse().unwrap();
+        let first = slots.enter(ipv4).unwrap();
+        assert!(slots.enter(mapped).is_none());
+        drop(first);
+        assert!(slots.enter(mapped).is_some());
+    }
+    #[test]
+    fn worker_panic_releases_peer_and_global_permits() {
+        let slots = Slots::new(2, 1);
+        let peer: IpAddr = "192.0.2.99".parse().unwrap();
+        let permit = slots.enter(peer).unwrap();
+        let worker = std::thread::spawn(move || {
+            let _permit = permit;
+            panic!("intentional test of RAII unwind");
+        });
+        assert!(worker.join().is_err());
+        assert_eq!(slots.used(), 0);
+        assert!(slots.enter(peer).is_some());
     }
 }

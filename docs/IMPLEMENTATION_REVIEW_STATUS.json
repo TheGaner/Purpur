@@ -7,7 +7,8 @@
       "status": "in_review",
       "paths": [
         "src/network.rs",
-        "src/protocol.rs"
+        "src/protocol.rs",
+        "scripts/test_peer_admission.py"
       ],
       "references": [
         "Horizon",
@@ -19,11 +20,12 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/network.rs": "f480bb86ace100c2cc8791d76d13e4cbc095bd275de63cc885611c8f016ff2b1",
-        "src/protocol.rs": "31acce580f5e8e58341eb42fae96d136c13d05de4a17e68cf9b03543d1fea628"
+        "src/network.rs": "3f35222d28acfe950cfd1f49ba9c824fa1e94dba9a5eac76988e6345b767030f",
+        "src/protocol.rs": "31acce580f5e8e58341eb42fae96d136c13d05de4a17e68cf9b03543d1fea628",
+        "scripts/test_peer_admission.py": "adddda245e06cd17702607c2e20536558a8d251b23ac207e588e00769ee5a47e"
       },
-      "test_evidence_partial": "77 Rust tests; DeadlineReader slow-drip and new DeadlineWriter expiry/framed-Pong/250ms TCP blocked-receiver regressions; release and process smokes. Rate/fairness/auth still pending.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-03 FerrumC/Horizon source comparison and write deadline tradeoffs"
+      "test_evidence_partial": "80 Rust tests; 16-thread global/per-IP permit contention, IPv4-mapped alias and panic RAII tests; live release TCP 127.0.0.1 held/rejected vs 127.0.0.2 allowed, recovery and invalid limits; full preauth rate/auth/load pending.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-04 source comparison and per-source in-flight quota decision; Paper throttle is not equivalent"
     },
     {
       "id": "REV-STATUS",
@@ -41,7 +43,7 @@
       "test_evidence_partial": "65 Rust tests; status-only worker 3.035s baseline vs ~1.02s one-second grace; immediate and 180ms delayed Pong, real process smoke",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-02 source comparisons and post-code tradeoffs",
       "current_sha256": {
-        "src/main.rs": "c85cf37d10044cbb675d31c8ad11cdf760c5d7508033325ffe15eeca389cf512",
+        "src/main.rs": "25b9bab04937a35f96ff2dc03d17e806cf47aa184a24b8f4d1b507928556fb6f",
         "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5"
       }
     },
@@ -172,7 +174,7 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/main.rs": "c85cf37d10044cbb675d31c8ad11cdf760c5d7508033325ffe15eeca389cf512"
+        "src/main.rs": "25b9bab04937a35f96ff2dc03d17e806cf47aa184a24b8f4d1b507928556fb6f"
       },
       "test_evidence_partial": "74 Rust tests; 17ms slow callback reproducer failed on old count-only queue, passes with cooperative 10ms cutoff; stop and zero-budget FIFO tests; release and integration smokes. Actual simulation TPS unverified.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-TICK-01 SteelMC/Paper/Folia source comparison, decisions and validation"

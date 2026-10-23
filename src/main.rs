@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plugins_dir = PathBuf::from("plugins");
     let mut data_dir = PathBuf::from("data");
     let mut max_connections: usize = 64;
+    let mut max_per_ip: usize = 8;
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -67,11 +68,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("--max-connections must be between 1 and 1024".into());
                 }
             }
+            "--max-per-ip" => {
+                max_per_ip = args.next().ok_or("missing --max-per-ip value")?.parse()?;
+                if !(1..=1024).contains(&max_per_ip) {
+                    return Err("--max-per-ip must be between 1 and 1024".into());
+                }
+            }
             "--plugins" => {
                 plugins_dir = PathBuf::from(args.next().ok_or("missing --plugins value")?)
             }
             "--help" => {
-                println!("purpur-horizon --bind HOST:PORT --motd TEXT --plugins DIR --data DIR --max-connections N\nPrototype: server-list status/ping only; no playable world yet.");
+                println!("purpur-horizon --bind HOST:PORT --motd TEXT --plugins DIR --data DIR --max-connections N --max-per-ip N\nPrototype: server-list status/ping only; no playable world yet.");
                 return Ok(());
             }
             _ => return Err(format!("unrecognized flag {arg}").into()),
@@ -113,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
-    let slots = network::Slots::new(max_connections);
+    let slots = network::Slots::new(max_connections, max_per_ip);
     // Blocking accept runs independently from the 20Hz game tick. No 50ms
     // queueing latency for status/login connections, and no accept budget can
     // monopolize a simulation tick. Use bounded admission before spawning.
@@ -123,8 +130,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let status_reply = Arc::clone(&status_reply);
             move || loop {
                 match listener.accept() {
-                    Ok((socket, _)) => {
-                        let Some(permit) = slots.enter() else {
+                    Ok((socket, peer)) => {
+                        let Some(permit) = slots.enter(peer.ip()) else {
                             drop(socket);
                             continue;
                         };

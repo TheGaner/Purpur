@@ -261,3 +261,22 @@ updated reviewed digest and evidence are recorded in the existing ledger.
 A pending review can remain pending without digests. This is not an
 approval mechanism: --enforce still requires full upstream comparison,
 testing and sign-off for every subsystem.
+
+
+### Preauthentication connection fairness
+
+The independent TCP acceptor now enforces both a global preauthentication
+worker limit (default 64, --max-connections N) and a configurable simultaneous
+per-source-IP limit (default 8, --max-per-ip N). Both accept values 1..1024;
+the overall limit always applies. Permits are released automatically on
+worker return, errors, or panic; IPv4-mapped IPv6 and IPv4 peers share one
+source allowance. The peer address is the actual TCP peer, never the
+untrusted Minecraft handshake hostname. Run
+python3 scripts/test_peer_admission.py after building the release binary to
+exercise rejection, other-source admission, expiry/release and invalid CLI
+settings using Linux loopback addresses.
+
+The per-IP cap is *simultaneous occupancy only*, not an attempt-rate limiter
+or IP authentication. Users behind NAT or a reverse proxy may share one
+quota; operators should tune the option accordingly. This prototype still
+does not accept authenticated gameplay logins.

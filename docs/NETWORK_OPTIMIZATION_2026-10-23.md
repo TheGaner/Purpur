@@ -103,3 +103,18 @@ status/Ping grace also caps Pong writes. A real local stalled TCP receiver
 and a 16MiB attempted send hit the 250ms deadline; ordinary status and
 login framing tests still pass. This demonstrates a bounded local send,
 NOT a comprehensive malicious-load benchmark or full worker cancellation.
+
+
+### 2026-10-23 per-peer handshake permit fairness follow-up
+
+The 64-worker default global permit bound did not stop a single TCP source
+IP from holding all worker slots with incomplete handshakes. A new bounded
+per-peer concurrent allowance (default 8, --max-per-ip) uses the actual
+accepted peer address, canonicalizes IPv4-mapped IPv6, and releases both
+global and source counters together on worker completion. The live TCP
+fixture on Linux loopback exercised simultaneous 127.0.0.1 saturation,
+independent 127.0.0.2 response and recovery. The Rust contention test uses
+16 threads and verifies a per-peer cap under parallel admission. This is
+not a packet-rate throttle, request-throughput benchmark, proxy-IP
+authentication, or high-scale DDoS prevention; all shared-NAT users still
+consume one configured IP allowance.
