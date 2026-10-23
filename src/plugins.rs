@@ -36,22 +36,34 @@ impl Plugins {
             })
             .unwrap_or(false);
         let java = if has_jar {
-            let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("java/HorizonJavaBridge.java");
-            match Command::new("java")
+            // Embed the Java loader in the Rust binary so deployment does not
+            // depend on the build machine, Horizon checkout or source directory.
+            let runtime = base.join(".runtime");
+            let source = runtime.join("HorizonJavaBridge.java");
+            let prepared = fs::create_dir_all(&runtime)
+                .and_then(|()| fs::write(&source, include_str!("../java/HorizonJavaBridge.java")));
+            if let Err(ref error) = prepared {
+                eprintln!("[java] cannot prepare embedded bridge: {error}");
+            }
+            let mut command = Command::new("java");
+            command
                 .arg("--source")
                 .arg("21")
                 .arg(source)
                 .arg(&jar_dir)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn()
-            {
-                Ok(child) => Some(child),
-                Err(e) => {
-                    eprintln!("[java] JVM bridge unavailable: {e}");
-                    None
+                .stderr(Stdio::inherit());
+            if prepared.is_ok() {
+                match command.spawn() {
+                    Ok(child) => Some(child),
+                    Err(e) => {
+                        eprintln!("[java] JVM bridge unavailable: {e}");
+                        None
+                    }
                 }
+            } else {
+                None
             }
         } else {
             None

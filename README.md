@@ -24,3 +24,12 @@ Rust native plugins implement exported ABI v1 and event callback; these librarie
 Place JAR files with plugin.yml in plugins/java. Java 21+ is needed only if JARs are installed. A separate Java process reads plugin.yml and invokes no-argument onEnable/onDisable methods. This **does not** implement Bukkit/Paper APIs, so ordinary existing Purpur plugins WILL NOT YET LOAD. The full bridge needs API emulation and bidirectional callbacks.
 
 See docs/architecture.md and docs/parity.md.
+
+
+## Standalone distribution
+
+A compiled purpur-horizon binary can be copied and run without the Horizon
+source tree, the Horizon engine, or the Purpur Java server. The Java bridge
+source is embedded in the Rust binary and extracted only when Java jars are
+present. A system Java 21+ runtime is still required for Java plugins.
+This does not change the existing Java API compatibility limitation.
