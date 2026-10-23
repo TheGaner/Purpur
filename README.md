@@ -292,3 +292,14 @@ of eight, validates other-source status response, same-source refusal and
 recovery, and reports status RTT/refusal p50/p95/p99 and sample counts.
 Uses Linux 127/8 loopback, not a remote traffic/load generator. Results
 are not gameplay TPS, production throughput or a DDoS protection claim.
+
+
+### Native permission lookup limits
+
+The native JSON permission store and its in-process resolver now apply
+consistent input limits: permission node and world identifier names must
+be valid ASCII identifiers of at most 128 bytes (with the existing
+wildcard-node syntax where applicable). Malformed, empty or oversized
+lookup strings return Undefined before entering the 8,192-entry cache.
+This prevents oversized lookup keys from retaining unbounded memory, but
+does not establish authenticated remote access or LuckPerms parity.

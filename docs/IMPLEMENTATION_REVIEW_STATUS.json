@@ -85,10 +85,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "ac4ffede3639bb61a984a238a1e384a86050dd45d598ad34dd045fca0dfe875c"
+        "src/builtin/permissions.rs": "28b6e0bfc3e9b16eab0f4112fa65c25c432df57a1c5baeee0fbbee2de07f16e4"
       },
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PERM-03 before/after source comparison and typed console identity decision",
-      "test_evidence_partial": "63 Rust tests (failing-before namespace alias regression), qualified user/group admin smoke across clean and SIGKILL restarts; LuckPerms parity pending"
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PERM-04 pre/post pinned LuckPerms calculator/cache and SteelMC configured validation comparison",
+      "test_evidence_partial": "82 Rust tests; RV-PERM-04 reproduced before-code 256KiB invalid permission lookup retained in 8192-entry cache, now denied before cloning/caching; 128-byte valid node/world boundary passes. LuckPerms parity still pending."
     },
     {
       "id": "REV-UTIL",
@@ -128,7 +128,7 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "ac4ffede3639bb61a984a238a1e384a86050dd45d598ad34dd045fca0dfe875c",
+        "src/builtin/permissions.rs": "28b6e0bfc3e9b16eab0f4112fa65c25c432df57a1c5baeee0fbbee2de07f16e4",
         "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658",
         "scripts/test_single_writer.py": "0f1dd52e68dcdc1c2a3c203e9210848ff881769050ea1ba458e08a79d6dd7c05"
       },

@@ -452,6 +452,12 @@ impl NativePermissions {
         if self.poisoned {
             return Decision::Undefined;
         }
+        // The persisted mutation API bounds names to 128 bytes, but a
+        // lookup previously accepted arbitrary strings into the 8192-entry
+        // cache. Reject invalid inputs before allocating/copying a cache key.
+        if !valid_node(node) || world.is_some_and(|w| !valid_id(w)) {
+            return Decision::Undefined;
+        }
         let Some(user) = user_subject(principal) else {
             return Decision::Undefined;
         };
@@ -594,6 +600,48 @@ mod tests {
             Decision::Deny
         );
         let _ = fs::remove_file(path);
+    }
+    #[test]
+    fn malformed_lookup_inputs_fail_closed_before_cache_allocation() {
+        let (path, mut db) = db();
+        db.set("alex", "test.read", Decision::Allow, None, None)
+            .unwrap();
+        let huge = "x".repeat(256 * 1024);
+        for (node, world) in [
+            (huge.as_str(), None),
+            ("test.read", Some(huge.as_str())),
+            ("", None),
+            ("test.invalid!", None),
+            ("test.read", Some("bad world")),
+            ("test.read", Some("")),
+        ] {
+            assert_eq!(db.resolve("alex", node, world, 100), Decision::Undefined);
+            assert!(
+                db.cache.lock().unwrap().is_empty(),
+                "invalid lookup was cached"
+            );
+        }
+        assert_eq!(db.resolve("alex", "test.read", None, 100), Decision::Allow);
+        assert_eq!(db.cache.lock().unwrap().len(), 1);
+        drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn maximum_valid_lookup_length_remains_supported() {
+        let (path, mut db) = db();
+        let node = "n".repeat(128);
+        let world = "w".repeat(128);
+        db.set("alex", &node, Decision::Allow, Some(&world), None)
+            .unwrap();
+        assert_eq!(
+            db.resolve("alex", &node, Some(&world), 100),
+            Decision::Allow
+        );
+        assert_eq!(db.resolve("alex", &node, None, 100), Decision::Undefined);
+        drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
     }
     #[test]
     fn contextual_rule_and_expiry_invalidate_cache() {
