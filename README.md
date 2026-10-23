@@ -110,3 +110,19 @@ example plugin, run python3 scripts/test_plugin_lifecycle.py. The complete
 cross-server retrospective audit remains open: see
 docs/IMPLEMENTATION_REFERENCE_AUDIT.md and docs/ROADMAP.md Phase -1.
 No full Bukkit compatibility, Horizon-only authentication or gameplay yet.
+
+## Persistent native data: single-writer policy
+
+The server still uses native JSON v1 data files. Each permissions/utilities
+database holds an exclusive advisory lock on its own .json.lock sidecar while
+open. Running two server instances against the same data directory fails
+closed, rather than silently overwriting grant or home/warp snapshots.
+Lockfile paths remain on disk after shutdown; locks are released by the OS.
+
+Each save checks the 2 MiB limit before writing a unique create_new temporary
+file, syncs it, renames it, and on Unix syncs the containing directory. This
+improves integrity but is not a substitute for SQLite/LMDB transactions,
+full fault-injection/power-loss validation or migrations.
+
+Build a release binary and run python3 scripts/test_single_writer.py to
+verify real-process exclusion and restart persistence.

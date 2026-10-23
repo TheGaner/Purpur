@@ -66,7 +66,11 @@
         "SteelMC"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "current_sha256": {
+        "src/builtin/permissions.rs": "00349d7f5fce00659dc23311d64fc8937e82e7e8193dc3efa22d80ac3660db45"
+      },
+      "design_evidence_partial": "Source touched by REV-STORAGE single-writer hardening; behavior parity review still pending."
     },
     {
       "id": "REV-UTIL",
@@ -81,11 +85,16 @@
         "Folia"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "current_sha256": {
+        "src/builtin/utilities.rs": "96c85b5d59781592aa307e62e7972d494d4a7e96c8170400b781a2925b03102d",
+        "src/builtin/mod.rs": "a8fef0663045ff45f57938541aa362d0885e841dfafc55d83b0eb9f50a0932e3"
+      },
+      "design_evidence_partial": "Source touched by REV-STORAGE single-writer hardening; behavior parity review still pending."
     },
     {
       "id": "REV-STORAGE",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/builtin/permissions.rs",
         "src/builtin/utilities.rs"
@@ -97,7 +106,13 @@
         "FerrumC"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "current_sha256": {
+        "src/builtin/permissions.rs": "00349d7f5fce00659dc23311d64fc8937e82e7e8193dc3efa22d80ac3660db45",
+        "src/builtin/utilities.rs": "96c85b5d59781592aa307e62e7972d494d4a7e96c8170400b781a2925b03102d"
+      },
+      "test_evidence_partial": "54 Rust tests, real simultaneous-two-process denial and successful restart, CRC not tested; full storage durability pending",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md REV-STORAGE before and after comparison"
     },
     {
       "id": "REV-PLUG",

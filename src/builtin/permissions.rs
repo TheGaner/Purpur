@@ -6,16 +6,46 @@ use crate::command::Permissions;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
 const MAX_SIZE: u64 = 2 * 1024 * 1024;
 const MAX_CACHE: usize = 8192;
 const MAX_SUBJECTS: usize = 128;
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Exclusive lifetime lock on a persistent JSON database. The .lock file
+/// remains after shutdown, but the OS releases the advisory lock on close.
+/// This supports ONE writer per file, not concurrent multi-server updates.
+pub(super) struct StoreLock {
+    _handle: File,
+}
+pub(super) fn lock_store(path: &Path) -> io::Result<StoreLock> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::other("no store parent"))?;
+    fs::create_dir_all(parent)?;
+    let lock_path = path.with_extension("json.lock");
+    let handle = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(lock_path)?;
+    handle.try_lock().map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::WouldBlock,
+            format!("store already open by another writer (or locking unsupported): {e}"),
+        )
+    })?;
+    Ok(StoreLock { _handle: handle })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -67,6 +97,7 @@ struct Cached {
 }
 pub struct NativePermissions {
     file: PathBuf,
+    _store_lock: StoreLock,
     data: Saved,
     cache: Mutex<HashMap<Key, Cached>>,
     revision: u64,
@@ -113,16 +144,53 @@ pub(super) fn atomic_json<T: Serialize>(file: &Path, value: &T) -> io::Result<()
         .parent()
         .ok_or_else(|| io::Error::other("no data parent"))?;
     fs::create_dir_all(parent)?;
-    let temp = file.with_extension("json.tmp");
+    // Serialize and validate the SAME size limit checked when opening data.
+    // Do not publish a successful write that the next process cannot load.
     let bytes = serde_json::to_vec_pretty(value).map_err(io::Error::other)?;
-    let mut out = File::create(&temp)?;
-    out.write_all(&bytes)?;
-    out.sync_all()?;
-    fs::rename(temp, file)
+    if bytes.len() as u64 > MAX_SIZE {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "serialized database would exceed 2 MiB",
+        ));
+    }
+    let name = file
+        .file_name()
+        .ok_or_else(|| io::Error::other("invalid store filename"))?;
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(name);
+    tmp_name.push(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let temp = parent.join(tmp_name);
+    // create_new means that an unexpected preexisting temp never gets truncated.
+    let mut out = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)?;
+    let written = (|| -> io::Result<()> {
+        out.write_all(&bytes)?;
+        out.sync_all()?;
+        drop(out);
+        fs::rename(&temp, file)?;
+        // On Unix, syncing the parent directory makes the rename durable.
+        // A failure after rename is ambiguous: caller must treat it as an
+        // I/O failure and restart before further persistence mutations.
+        #[cfg(unix)]
+        File::open(parent)?.sync_all()?;
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    written
 }
 impl NativePermissions {
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
         let file = path.as_ref().to_owned();
+        // Lock BEFORE reading, or two processes can both load one stale snapshot.
+        let store_lock = lock_store(&file)?;
         let data: Saved = if file.exists() {
             let f = File::open(&file)?;
             if f.metadata()?.len() > MAX_SIZE {
@@ -141,6 +209,7 @@ impl NativePermissions {
         Self::validate(&data)?;
         Ok(Self {
             file,
+            _store_lock: store_lock,
             data,
             cache: Mutex::new(HashMap::new()),
             revision: 0,
@@ -355,6 +424,7 @@ mod tests {
             db.resolve("alex", "essentials.home", None, 100),
             Decision::Allow
         );
+        drop(db);
         let fresh = NativePermissions::open(&path).unwrap();
         assert_eq!(
             fresh.resolve("alex", "essentials.home", None, 100),
@@ -427,11 +497,52 @@ mod tests {
         let _ = fs::remove_file(path);
     }
     #[test]
+    fn second_store_writer_is_rejected_until_first_drops() {
+        let (path, mut first) = db();
+        first
+            .set("alex", "test.node", Decision::Allow, None, None)
+            .unwrap();
+        let error = match NativePermissions::open(&path) {
+            Ok(_) => panic!("concurrent store must not open"),
+            Err(e) => e,
+        };
+        assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+        drop(first);
+        let second = NativePermissions::open(&path).unwrap();
+        assert_eq!(
+            second.resolve("alex", "test.node", None, 10),
+            Decision::Allow
+        );
+        drop(second);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn oversize_write_preserves_previous_db() {
+        let (path, mut db) = db();
+        db.set("alex", "test.read", Decision::Allow, None, None)
+            .unwrap();
+        let original = fs::read(&path).unwrap();
+        let result = atomic_json(&path, &"x".repeat((MAX_SIZE + 1) as usize));
+        assert!(result.is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        drop(db);
+        let reopened = NativePermissions::open(&path).unwrap();
+        assert_eq!(
+            reopened.resolve("alex", "test.read", None, 10),
+            Decision::Allow
+        );
+        drop(reopened);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
     fn invalid_input_and_corruption_fail_closed() {
         let (path, mut db) = db();
         assert!(db.set("alex", "", Decision::Allow, None, None).is_err());
         assert!(db.set("alex", "a", Decision::Undefined, None, None).is_ok());
         fs::write(&path, "{broken").unwrap();
+        drop(db);
         assert!(NativePermissions::open(&path).is_err());
         let _ = fs::remove_file(path);
     }

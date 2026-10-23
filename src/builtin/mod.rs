@@ -235,6 +235,7 @@ mod tests {
         assert!(dispatch("warp", "spawn", &mut perms, &mut utils)
             .unwrap()
             .contains("teleport unavailable"));
+        drop(utils);
         let fresh = NativeUtilities::open(base.join("utilities.json")).unwrap();
         assert!(fresh.home("alex", "base").is_some());
         let _ = std::fs::remove_dir_all(base);

@@ -117,3 +117,33 @@ Acceptance: deterministic deadline-expired unit check, real TCP slow-drip test, 
 **Remaining work and gate status**: REV-PLUG IN_REVIEW: untrusted native DLLs still execute arbitrary code; manifest writer can corrupt caller memory if malicious; Java Bukkit/Paper APIs, WIT sandbox migration, Java process-tree control, plugin scheduler ordering, and a complete ABI conformance suite remain. REV-NET IN_REVIEW: no actual Horizon login, full write-side deadlines, total transaction/accounting limits, per-IP concurrency, shutdown cancellation, fuzz corpus or large-scale traffic evidence. Both stay unapproved. RETROSPECTIVE REVIEW HOLD REMAINS ACTIVE.
 
 **Compared implementation options after patch**: Horizon WIT/Wasmtime is preferable for untrusted plugins when implemented; the host-owned manifest buffer is a small improvement only to the explicitly trusted native extension proof of concept. FerrumC's Tokio timeout wraps whole handshake futures; our small blocking reader provides similar total-read-window semantics without bringing the unneeded async dependency into the pre-playable server. Full transition to async reactor needs measured player traffic and packet correctness.
+
+
+## REV-STORAGE targeted pre-implementation comparison (2026-10-23)
+
+Current JSON writer in src/builtin/permissions.rs::atomic_json has fixed path json.tmp and truncates it on every call. Two independent services can overwrite a shared temporary file, and successful commits can exceed the MAX_SIZE=2MiB limit enforced only on restart. No parent directory fsync confirms rename durability. The current code clones full maps and rewrites them on every update.
+
+Pinned primary sources:
+- LuckPerms b93a4d7 common/.../storage/implementation/file/SeparatedConfigurateStorage.java: per-path ReentrantLock, separate user/group/track files and watcher invalidation.
+- LuckPerms b93a4d7 common/.../storage/StorageFactory.java: selectable SQLite/H2/SQL/NoSQL/file backends, unlike our monolithic snapshot.
+- EssentialsX e70bdb8 Essentials/.../UserData.java: UUID-named per-player YAML, explicit blocking saves on cleanup and config reload. ManagedFile.java manages versioned packaged resources, not a transactional player store.
+- FerrumC 51830e9 src/lib/storage/src/lmdb.rs: LMDB MVCC, parallel read transactions and one serialized writer. Schema/dependency migration is future work.
+- SteelMC dc8eaba steel-core/src/chunk_saver/region_manager.rs: async region handles and prepared per-chunk writes, on-demand data and cached 8-KiB headers, not a drop-in permission backend.
+- Paper/Purpur/Folia help define ownership and durability expectations, not the implementation of this Rust JSON writer. Horizon, Krypton, e4mc and PulseNet are unrelated to this file persistence change.
+
+Options: A retain fixed-temp and process convention (lost updates possible); B unique temps alone (prevents clobbered temp but not concurrent lost updates); C immediately use SQLite/LMDB (much larger migration/unbenchmarked cost); D chosen single-writer JSON safety gate: deterministic advisory lockfile owned for each service lifetime; unique create_new temp; precommit serialized size cap; sync temp and parent directory. This preserves v1 schema, fails fast on second active store, prevents temp truncation, and is proportional to current prototype stage.
+
+Acceptance: unchanged schema and restarts, fail second open while writer active, no successful oversized snapshots, fail-closed startup on corruption, permission/utilities regressions, release build and no-JVM smoke. Still not a cross-host transactional database, optimized throughput or full LuckPerms/EssentialsX storage parity. First-party AGPL code only, no upstream imports. Persisted lockfiles are expected: OS releases locks on process exit.
+
+
+## REV-STORAGE focused post-implementation verification — 2026-10-23
+
+Files changed: src/builtin/permissions.rs (shared writer, StoreLock), src/builtin/utilities.rs (store lock), src/builtin/mod.rs (restart integration), scripts/test_single_writer.py. No third-party source copied or translated.
+
+Result versus options: kept first-party Rust snapshot storage with v1 JSON schema but added lifetime exclusive advisory .json.lock handles (one concurrent process allowed per logical store), unique PID/monotonic-counter temporary filename using create_new instead of clobbering json.tmp, enforced the existing 2 MiB size cap on serialized output, called sync_all on the temporary file before rename and sync_all on its parent directory after replacement on Unix. The global full-map clone/rewrite cost remains and is not proven optimal; future SQLite/LMDB migration requires measured workload and migration tests.
+
+Tests: 54/54 Rust unit/integration tests passed (51 baseline + three new tests); deliberately invalid JSON test was corrected to close the writer first, ensuring the corruption parser rather than advisory lock causes rejection. Native permissions, utilities and command integration restart tests still pass. scripts/test_single_writer.py launched two independent server processes against the same data directory: second process exited with lock failure; after first server stopped, re-opening succeeded and both permission grant and saved home remained. Existing Java normal/hung lifecycle fixtures continued passing; release compilation and formatting passed.
+
+Unverified: abrupt power-cut on actual filesystem, advisory lock behavior on remote/uncooperative clients or network mounts, operating-system-specific filesystem semantics, multi-process DB transaction isolation (intentionally unsupported), data volume/throughput scaling, full LuckPerms/EssentialsX semantic/data compatibility, and authenticated-UUID identity. In particular, if parent-directory sync fails AFTER a successful rename, the caller currently sees an I/O error while the on-disk file may already be updated; in-memory state is not published. This requires an explicit ambiguous-durability/error recovery policy before production.
+
+REV-STORAGE is IN_REVIEW rather than approved. The original source comparisons, alternatives, acceptance plan and remaining risk are recorded above. The source hash ledger is updated, and the review hold remains active.

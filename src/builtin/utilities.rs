@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Original native utilities service inspired by common Essentials-style functionality.
 //! Pure data layer only: world validation, teleport, economy and events are not implemented.
-use super::permissions::atomic_json;
+use super::permissions::{atomic_json, lock_store, StoreLock};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -55,6 +55,7 @@ struct Saved {
 }
 pub struct NativeUtilities {
     file: PathBuf,
+    _store_lock: StoreLock,
     data: Saved,
 }
 fn valid_name(s: &str) -> bool {
@@ -77,6 +78,7 @@ fn normalize(name: &str) -> io::Result<String> {
 impl NativeUtilities {
     pub fn open(file: impl AsRef<Path>) -> io::Result<Self> {
         let file = file.as_ref().to_owned();
+        let store_lock = lock_store(&file)?;
         let data: Saved = if file.exists() {
             let input = fs::File::open(&file)?;
             if input.metadata()?.len() > MAX_SIZE {
@@ -96,7 +98,11 @@ impl NativeUtilities {
             }
         };
         Self::validate(&data)?;
-        Ok(Self { file, data })
+        Ok(Self {
+            file,
+            _store_lock: store_lock,
+            data,
+        })
     }
     fn validate(data: &Saved) -> io::Result<()> {
         let mut count = 0;
@@ -217,6 +223,7 @@ mod tests {
         m.set_warp("Spawn", loc.clone()).unwrap();
         assert_eq!(m.warp("SPAWN"), Some(&loc));
         assert_eq!(m.list_warps(), vec!["spawn"]);
+        drop(m);
         let mut fresh = NativeUtilities::open(&path).unwrap();
         assert_eq!(fresh.warp("spawn"), Some(&loc));
         assert!(fresh.delete_warp("spawn").unwrap());
@@ -236,6 +243,22 @@ mod tests {
         let _ = fs::remove_file(path);
     }
     #[test]
+    fn utilities_are_single_writer_and_persist_across_restart() {
+        let (path, mut first) = service();
+        let location = Position::new("world", 1.0, 65.0, 2.0).unwrap();
+        first.set_warp("spawn", location.clone()).unwrap();
+        assert_eq!(
+            NativeUtilities::open(&path).err().unwrap().kind(),
+            io::ErrorKind::WouldBlock
+        );
+        drop(first);
+        let second = NativeUtilities::open(&path).unwrap();
+        assert_eq!(second.warp("spawn"), Some(&location));
+        drop(second);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
     fn rejects_invalid_coords_and_corrupted_files() {
         assert!(Position::new("world", f64::NAN, 64.0, 0.0).is_err());
         assert!(Position::new("world", 0.0, 64.0, 30_000_001.0).is_err());
@@ -248,6 +271,7 @@ mod tests {
             r#"{"version":1,"warps":{"spawn":{"world":"world","x":1e400,"y":0,"z":0}}}"#,
         )
         .unwrap();
+        drop(m);
         assert!(NativeUtilities::open(&path).is_err());
         let _ = fs::remove_file(path);
     }
