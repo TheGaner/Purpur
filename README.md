@@ -280,3 +280,15 @@ The per-IP cap is *simultaneous occupancy only*, not an attempt-rate limiter
 or IP authentication. Users behind NAT or a reverse proxy may share one
 quota; operators should tune the option accordingly. This prototype still
 does not accept authenticated gameplay logins.
+
+
+### Local preauth fairness regression and benchmark
+
+After cargo +1.90.0 build --release, run python3 -B
+scripts/test_peer_admission.py for the fast correctness fixture and
+python3 -B scripts/bench_admission.py for a separate controlled saturation
+experiment. The latter holds eight 127.0.0.1 connections at a per-IP quota
+of eight, validates other-source status response, same-source refusal and
+recovery, and reports status RTT/refusal p50/p95/p99 and sample counts.
+Uses Linux 127/8 loopback, not a remote traffic/load generator. Results
+are not gameplay TPS, production throughput or a DDoS protection claim.

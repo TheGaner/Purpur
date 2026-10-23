@@ -20,7 +20,7 @@ Rust 1.90 release build; local TCP; 10 warmups; 120 sequential status requests; 
 
 ## Implemented architecture
 
-- src/main.rs: dedicated blocking TCP acceptor thread; active connections bounded by atomic permits (--max-connections, default 64, range 1–1024). The 20Hz game loop no longer accepts sockets.
+- src/main.rs: dedicated blocking TCP acceptor thread; active preauth workers bounded by a mutex-protected global and per-IP permit tracker (--max-connections default 64, --max-per-ip default 8; both 1–1024). The 20Hz game loop no longer accepts sockets.
 - src/main.rs: immutable status response is JSON-encoded and fully framed once at startup, then shared as an Arc of bytes. The displayed online player count remains static zero until play sessions exist.
 - src/protocol.rs: frame_read_limited rejects advertised lengths before allocating payloads. Explicit limits: handshake 1024 bytes, login hello 64 bytes, status request 1 byte, ping 9 bytes.
 - src/network.rs: protocol-777 handshake status/login/transfer intent, login hello with printable 1–16 byte username and fixed 16-byte **untrusted** claimed UUID, precise trailing-data checking and login-disconnect framing. Hostname length matches Horizon StrN<255> semantics (up to 765 UTF-8 bytes, 255 Unicode characters).
@@ -37,8 +37,8 @@ Rust 1.90 release build; local TCP; 10 warmups; 120 sequential status requests; 
 
 ## Constraints and remaining risks
 
-1. One OS thread per active unauthenticated client remains (bounded by 64 by default). It is not appropriate for very high concurrent connections. Move to a bounded nonblocking reactor only after real play states and matched measurements justify the migration.
-2. Workers have a per-read socket timeout but not an overall handshake deadline or per-peer byte/rate quotas; add cancellation and connection telemetry.
+1. One OS thread per admitted unauthenticated client remains (bounded by 64 globally and 8 per IP by default). It is not appropriate for very high concurrent connections. Move to a bounded nonblocking reactor only after real play states and matched measurements justify the migration.
+2. Workers now have an absolute three-second monotonic preauth read/write deadline and simultaneous per-IP occupancy limits; per-peer byte/attempt-rate quotas, cancellation of non-I/O callbacks, and telemetry are still outstanding.
 3. Listener thread currently terminates with the process, not coordinated graceful shutdown.
 4. Client-declared UUID and spoofable brand do not establish authenticated Horizon identity. Version 777 is shared with compatible generic clients. Login encryption, Mojang authentication, capability negotiation, configuration, play and chunks are still absent.
 5. Status reply is immutable and uses zero online players. Once live player counts exist, use a versioned snapshot refreshed after admission/leave.
@@ -118,3 +118,20 @@ independent 127.0.0.2 response and recovery. The Rust contention test uses
 not a packet-rate throttle, request-throughput benchmark, proxy-IP
 authentication, or high-scale DDoS prevention; all shared-NAT users still
 consume one configured IP allowance.
+
+
+### RV-NET-05: Saturated per-IP fairness experiment — controlled local measurements
+
+Reproduce after the Rust 1.90 release build: python3 -B scripts/bench_admission.py. The script uses an isolated temporary server, TCP on 127.0.0.1:ephemeral with --max-connections 16 --max-per-ip 8, real 127.0.0.1 and 127.0.0.2 loopback source binds, two successive trials, and four concurrent status clients. Each trial compares 24 unloaded status requests with 24 from a different IP while eight incomplete same-IP handshakes consume the whole per-IP quota, then exercises eight intended refusals and 12 original-IP recoveries. All successful requests parse protocol 777 JSON status, not merely TCP connection establishment. Quantiles use nearest-rank ceil(p*n), not an interpolated estimate.
+
+| Condition | Trial 1 | Trial 2 |
+| --- | ---: | ---: |
+| Other IP unloaded p50 / p95 | 0.549 / 0.979 ms | 0.464 / 0.844 ms |
+| Other IP while 8 first-IP workers held p50 / p95 / p99 | 0.526 / 0.900 / 1.083 ms | 0.551 / 0.753 / 0.939 ms |
+| Same-IP refusal p50 | 0.048 ms | 0.037 ms |
+| Original IP recovery p50 | 0.533 ms | 0.471 ms |
+| Extra same-IP rejects / other-IP accepts / recovered accepts | 8/8 / 24/24 / 12/12 | 8/8 / 24/24 / 12/12 |
+
+Environment at verification: Linux 7.2.11-1-cachyos x86_64, Python 3.14.8, Cargo/Rust 1.90.0, release binary. The first attempt at adding an unloaded comparison temporarily omitted a Python Path import; this was fixed before the measured rerun, and both the experiment and existing scripts/test_peer_admission.py passed.
+
+Total two trials: 16/16 intended same-IP refusals, 48/48 different-IP successes with that first IP saturated, 24/24 post-release successes, and 48/48 unloaded comparison successes. No Rust behavior was changed. These short local samples do not support a general speedup, real internet or NAT/proxy compatibility, volumetric DDoS resistance, p95/p99 service-level objectives, or gameplay TPS estimates. Further load testing should stress the global cap, prolonged connection churn, arrival-rate limits and error logging without conflating kernel listen backlog and application fairness.

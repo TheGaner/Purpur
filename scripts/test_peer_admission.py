@@ -33,6 +33,7 @@ def recv_exact(sock, size):
 
 
 def get_status(address, source=None):
+    started = time.perf_counter_ns()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
         client.settimeout(2)
         if source:
@@ -61,6 +62,7 @@ def get_status(address, source=None):
                 break
         answer = json.loads(body[pos:pos + size])
         assert answer["version"]["protocol"] == 777
+    return (time.perf_counter_ns() - started) / 1_000_000
 
 
 def main():

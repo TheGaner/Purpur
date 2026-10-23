@@ -8,7 +8,8 @@
       "paths": [
         "src/network.rs",
         "src/protocol.rs",
-        "scripts/test_peer_admission.py"
+        "scripts/test_peer_admission.py",
+        "scripts/bench_admission.py"
       ],
       "references": [
         "Horizon",
@@ -22,10 +23,11 @@
       "current_sha256": {
         "src/network.rs": "3f35222d28acfe950cfd1f49ba9c824fa1e94dba9a5eac76988e6345b767030f",
         "src/protocol.rs": "31acce580f5e8e58341eb42fae96d136c13d05de4a17e68cf9b03543d1fea628",
-        "scripts/test_peer_admission.py": "adddda245e06cd17702607c2e20536558a8d251b23ac207e588e00769ee5a47e"
+        "scripts/test_peer_admission.py": "b2eba263130356065764127a95784b2078e736859f22fe3b35d660d7e61bc5d5",
+        "scripts/bench_admission.py": "efac714884548751b4b6bd11240e46d025ca3c408958d8bb0c744174239ea5c7"
       },
-      "test_evidence_partial": "80 Rust tests; 16-thread global/per-IP permit contention, IPv4-mapped alias and panic RAII tests; live release TCP 127.0.0.1 held/rejected vs 127.0.0.2 allowed, recovery and invalid limits; full preauth rate/auth/load pending.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-04 source comparison and per-source in-flight quota decision; Paper throttle is not equivalent"
+      "test_evidence_partial": "80 Rust tests; RV-NET-04 live peer fixture; RV-NET-05 2 release-server localhost saturation trials: 16/16 same-IP rejects, 48/48 other-IP status successes under full 8/8 quota, 24/24 post-release successes; no real WAN/proxy or DDoS conclusions.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-04 and RV-NET-05 pinned source comparisons, controlled benchmark methods, results and limitations"
     },
     {
       "id": "REV-STATUS",
