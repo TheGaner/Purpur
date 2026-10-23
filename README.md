@@ -9,6 +9,15 @@ This branch of the Purpur fork contains a NEW Rust server intended only for the 
     cargo test
     cargo run -- --bind 127.0.0.1:25565 --motd "Rust server"
 
+On this development PC, Rust 1.90 was installed under the project-local
+.rustup folder so the host's default Rust configuration stays unchanged:
+
+    RUSTUP_HOME="$PWD/.rustup" cargo +1.90.0 test
+    RUSTUP_HOME="$PWD/.rustup" cargo +1.90.0 run -- --bind 127.0.0.1:25565
+
+A fresh clone on a different machine needs a Rust 1.90+ toolchain installed
+through rustup before using the normal cargo commands.
+
 Commands: stop, version, plugins, help.
 
 ## Native Rust plugins (trusted only)
