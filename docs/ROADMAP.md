@@ -20,6 +20,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [ ] RV-UTIL: Compare homes/warps and planned player actions against EssentialsX, Bukkit/Paper, and Folia owner-affine teleport.
 - [ ] RV-STORAGE: Audit JSON persistence durability and scaling against LuckPerms/EssentialsX and SteelMC/FerrumC before choosing a database design.
   - [x] RV-STORAGE-01: Source compare pinned LuckPerms per-path locks and backends, EssentialsX UUID player files, FerrumC LMDB and SteelMC region storage; implement single-writer JSON safety, durable-rename improvements, output-size cap and real two-process persistence tests. The broader storage review remains IN_REVIEW.
+  - [x] RV-STORAGE-02: Recover safely from ambiguous fsync-after-rename by phase-tagging write errors, poisoning in-process permission/utility stores, denying/hiding stale reads and blocking writes until reopen; verified with injected faults and SIGKILL restart. Wider REV-STORAGE stays IN_REVIEW.
 - [ ] RV-PLUG: Audit native ABI safety, plugin lifecycle and Java bridge against Horizon Wasmtime, Paper/Purpur/Folia and upstream plugin needs; fix unsafe metadata pointer scan and potential blocking shutdown.
   - [x] RV-PLUG-01: Compare Horizon Wasmtime, Paper Java lifecycle, FerrumC stub and SteelMC command API; remove unbounded native manifest pointer scan with host-owned v2 buffer and cap Java child shutdown, unit/runtime fixtures; wider REV-PLUG still IN_REVIEW.
 - [ ] RV-TICK: Audit command work budgets, tick behavior and future ownership against Folia/Paper and SteelMC.
@@ -149,3 +150,8 @@ REV-PLUG and REV-NET are IN_REVIEW, NOT APPROVED. Targeted unsafe native manifes
 ## 2026-10-23 retrospective single-writer persistence checkpoint
 
 RV-STORAGE-01 completed as **focused hardening**, not full review approval. Native JSON services now lock their data files against simultaneous active writers, write uniquely named temporary files without truncation, reject writes exceeding the 2 MiB restart limit and sync the renamed directory on Unix. The JSON v1 schema remains compatible. Full Rust test suite: 54 passing (51 at session start); release build, explicit corruption/restart tests, two-process exclusion/restart test, Java lifecycle smoke and source-review coverage check passed. Ambiguous post-rename sync failures, filesystem crash simulation, migration, large-store scaling and full LuckPerms/EssentialsX semantics remain open in docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Phase -1 hold remains enforced.
+
+
+## 2026-10-23 retrospective ambiguous-write recovery checkpoint
+
+RV-STORAGE-02 was completed as a narrow safety fix, NOT complete storage approval. Rust 1.90 full test suite 57/57 passed (54 starting baseline); release build, rustfmt, real two-instance write rejection and clean/unclean process restarts, normal/hung Java sidecar regression passed. An injected directory-sync failure after successful rename now leaves permissions fail closed and utilities unavailable until reopen, preventing a stale live snapshot from overwriting disk. Independent pre-rename failures remain retryable. The repository retains native JSON v1 compatibility and first-party AGPL source; no real power-loss test, transaction migration or performance benchmark occurred. See docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Phase -1 mandatory review hold remains ACTIVE.

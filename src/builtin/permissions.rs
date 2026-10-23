@@ -101,6 +101,7 @@ pub struct NativePermissions {
     data: Saved,
     cache: Mutex<HashMap<Key, Cached>>,
     revision: u64,
+    poisoned: bool,
 }
 // Store identities in disjoint namespaces so player UUIDs/names never
 // resolve as group subjects, even if a remote client supplies "group:admin".
@@ -139,52 +140,73 @@ fn match_node(pattern: &str, node: &str) -> Option<usize> {
         None
     }
 }
-pub(super) fn atomic_json<T: Serialize>(file: &Path, value: &T) -> io::Result<()> {
-    let parent = file
-        .parent()
-        .ok_or_else(|| io::Error::other("no data parent"))?;
-    fs::create_dir_all(parent)?;
-    // Serialize and validate the SAME size limit checked when opening data.
-    // Do not publish a successful write that the next process cannot load.
-    let bytes = serde_json::to_vec_pretty(value).map_err(io::Error::other)?;
-    if bytes.len() as u64 > MAX_SIZE {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "serialized database would exceed 2 MiB",
+/// An error after rename means disk may contain the new revision even
+/// though directory durability could not be confirmed.
+pub(super) struct PersistError {
+    pub(super) cause: io::Error,
+    pub(super) replaced: bool,
+}
+pub(super) fn atomic_json<T: Serialize>(file: &Path, value: &T) -> Result<(), PersistError> {
+    atomic_json_with_sync(file, value, |parent| {
+        #[cfg(unix)]
+        File::open(parent)?.sync_all()?;
+        #[cfg(not(unix))]
+        let _ = parent;
+        Ok(())
+    })
+}
+pub(super) fn atomic_json_with_sync<T: Serialize>(
+    file: &Path,
+    value: &T,
+    sync_dir: impl FnOnce(&Path) -> io::Result<()>,
+) -> Result<(), PersistError> {
+    let mut replaced = false;
+    let mut temp_path: Option<PathBuf> = None;
+    let outcome = (|| -> io::Result<()> {
+        let parent = file
+            .parent()
+            .ok_or_else(|| io::Error::other("no data parent"))?;
+        fs::create_dir_all(parent)?;
+        // Exactly the same limit enforced on open.
+        let bytes = serde_json::to_vec_pretty(value).map_err(io::Error::other)?;
+        if bytes.len() as u64 > MAX_SIZE {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "serialized database would exceed 2 MiB",
+            ));
+        }
+        let name = file
+            .file_name()
+            .ok_or_else(|| io::Error::other("invalid store filename"))?;
+        let mut tmp_name = std::ffi::OsString::from(".");
+        tmp_name.push(name);
+        tmp_name.push(format!(
+            ".{}.{}.tmp",
+            std::process::id(),
+            TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
-    }
-    let name = file
-        .file_name()
-        .ok_or_else(|| io::Error::other("invalid store filename"))?;
-    let mut tmp_name = std::ffi::OsString::from(".");
-    tmp_name.push(name);
-    tmp_name.push(format!(
-        ".{}.{}.tmp",
-        std::process::id(),
-        TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    let temp = parent.join(tmp_name);
-    // create_new means that an unexpected preexisting temp never gets truncated.
-    let mut out = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temp)?;
-    let written = (|| -> io::Result<()> {
+        let temp = parent.join(tmp_name);
+        let mut out = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)?;
+        temp_path = Some(temp.clone());
         out.write_all(&bytes)?;
         out.sync_all()?;
         drop(out);
         fs::rename(&temp, file)?;
-        // On Unix, syncing the parent directory makes the rename durable.
-        // A failure after rename is ambiguous: caller must treat it as an
-        // I/O failure and restart before further persistence mutations.
-        #[cfg(unix)]
-        File::open(parent)?.sync_all()?;
+        replaced = true;
+        // An error here is fundamentally different from one before rename.
+        // Never allow stale live data to overwrite the newly renamed state.
+        sync_dir(parent)?;
         Ok(())
     })();
-    if written.is_err() {
-        let _ = fs::remove_file(&temp);
+    if !replaced {
+        if let Some(temp) = temp_path {
+            let _ = fs::remove_file(temp);
+        }
     }
-    written
+    outcome.map_err(|cause| PersistError { cause, replaced })
 }
 impl NativePermissions {
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
@@ -213,6 +235,7 @@ impl NativePermissions {
             data,
             cache: Mutex::new(HashMap::new()),
             revision: 0,
+            poisoned: false,
         })
     }
     fn validate(data: &Saved) -> io::Result<()> {
@@ -251,12 +274,34 @@ impl NativePermissions {
         Ok(())
     }
     fn commit(&mut self, next: Saved) -> io::Result<()> {
+        self.commit_with(next, atomic_json)
+    }
+    fn commit_with(
+        &mut self,
+        next: Saved,
+        save: impl FnOnce(&Path, &Saved) -> Result<(), PersistError>,
+    ) -> io::Result<()> {
+        if self.poisoned {
+            return Err(io::Error::other(
+                "permission store requires restart after ambiguous write",
+            ));
+        }
         Self::validate(&next)?;
-        atomic_json(&self.file, &next)?;
-        self.data = next;
-        self.revision = self.revision.wrapping_add(1);
-        self.cache.lock().unwrap().clear();
-        Ok(())
+        match save(&self.file, &next) {
+            Ok(()) => {
+                self.data = next;
+                self.revision = self.revision.wrapping_add(1);
+                self.cache.lock().unwrap().clear();
+                Ok(())
+            }
+            Err(failure) => {
+                if failure.replaced {
+                    self.poisoned = true;
+                    self.cache.lock().unwrap().clear();
+                }
+                Err(failure.cause)
+            }
+        }
     }
     /// Persist a principal grant. Undefined removes that exact node/context.
     pub fn set(
@@ -316,6 +361,11 @@ impl NativePermissions {
         self.revision
     }
     pub fn resolve(&self, principal: &str, node: &str, world: Option<&str>, now: u64) -> Decision {
+        // If rename succeeded but fsync failed, any cached or in-memory
+        // authorizations may disagree with the snapshot on disk.
+        if self.poisoned {
+            return Decision::Undefined;
+        }
         let key = Key {
             principal: principal.to_owned(),
             node: node.to_ascii_lowercase(),
@@ -533,6 +583,82 @@ mod tests {
             Decision::Allow
         );
         drop(reopened);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn post_rename_sync_failure_poison_denies_and_survives_restart() {
+        let (path, mut db) = db();
+        db.set("alex", "test.access", Decision::Allow, None, None)
+            .unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.access", None, 100),
+            Decision::Allow
+        );
+        let mut next = db.data.clone();
+        next.grants
+            .entry("user:alex".into())
+            .or_default()
+            .push(Rule {
+                node: "test.replaced".into(),
+                decision: Decision::Deny,
+                world: None,
+                expires_at: None,
+            });
+        let error = db
+            .commit_with(next, |file, value| {
+                atomic_json_with_sync(file, value, |_| {
+                    Err(io::Error::other("injected directory sync failure"))
+                })
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("injected directory"));
+        assert!(db.poisoned);
+        // Invalidate a warm permission cache and deny everything immediately.
+        assert_eq!(
+            db.resolve("alex", "test.access", None, 100),
+            Decision::Undefined
+        );
+        let disk = fs::read(&path).unwrap();
+        assert!(db
+            .set("alex", "test.other", Decision::Allow, None, None)
+            .is_err());
+        assert_eq!(fs::read(&path).unwrap(), disk);
+        drop(db);
+        let fresh = NativePermissions::open(&path).unwrap();
+        assert_eq!(
+            fresh.resolve("alex", "test.access", None, 100),
+            Decision::Allow
+        );
+        assert_eq!(
+            fresh.resolve("alex", "test.replaced", None, 100),
+            Decision::Deny
+        );
+        drop(fresh);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn pre_rename_error_preserves_live_store_and_allows_retry() {
+        let (path, mut db) = db();
+        let next = db.data.clone();
+        let error = db
+            .commit_with(next, |_, _| {
+                Err(PersistError {
+                    cause: io::Error::other("injected pre-rename failure"),
+                    replaced: false,
+                })
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("pre-rename"));
+        assert!(!db.poisoned);
+        db.set("alex", "test.allowed", Decision::Allow, None, None)
+            .unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.allowed", None, 10),
+            Decision::Allow
+        );
+        drop(db);
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json.lock"));
     }

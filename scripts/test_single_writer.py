@@ -44,6 +44,22 @@ def test():
             text=True,capture_output=True,cwd=root,timeout=8)
         assert third.returncode==0,(third.stdout,third.stderr)
         assert "Allow" in third.stdout and "base" in third.stdout,third.stdout
-        print("PASS: concurrent server blocked, restart succeeds, both stores persisted")
+        # An unclean process exit must release the OS advisory locks.
+        with (root/"crash.log").open("w+") as log:
+            crashed=subprocess.Popen(args,stdin=subprocess.PIPE,
+                stdout=log,stderr=log,text=True,cwd=root)
+            try:
+                time.sleep(0.3)
+                assert crashed.poll() is None, "crash fixture failed to start"
+            finally:
+                if crashed.poll() is None:
+                    crashed.kill()
+                crashed.wait(timeout=4)
+        resumed=subprocess.run(args,input=
+            "permissions check alice essentials.home\nhomes alice\nstop\n",
+            text=True,capture_output=True,cwd=root,timeout=8)
+        assert resumed.returncode==0,(resumed.stdout,resumed.stderr)
+        assert "Allow" in resumed.stdout and "base" in resumed.stdout
+        print("PASS: second writer denied; clean/unclean restarts preserve data")
 if __name__=="__main__":
     test()

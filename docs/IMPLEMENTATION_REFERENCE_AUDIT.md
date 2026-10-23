@@ -147,3 +147,30 @@ Tests: 54/54 Rust unit/integration tests passed (51 baseline + three new tests);
 Unverified: abrupt power-cut on actual filesystem, advisory lock behavior on remote/uncooperative clients or network mounts, operating-system-specific filesystem semantics, multi-process DB transaction isolation (intentionally unsupported), data volume/throughput scaling, full LuckPerms/EssentialsX semantic/data compatibility, and authenticated-UUID identity. In particular, if parent-directory sync fails AFTER a successful rename, the caller currently sees an I/O error while the on-disk file may already be updated; in-memory state is not published. This requires an explicit ambiguous-durability/error recovery policy before production.
 
 REV-STORAGE is IN_REVIEW rather than approved. The original source comparisons, alternatives, acceptance plan and remaining risk are recorded above. The source hash ledger is updated, and the review hold remains active.
+
+
+## REV-STORAGE-02 pre-implementation comparison: ambiguous post-rename failure (2026-10-23)
+
+Initial defect: Rust atomic_json syncs a temporary file, renames over the current snapshot and syncs the parent directory. A failing post-rename directory sync_all returns error, so NativePermissions::commit and NativeUtilities::commit do not publish the already-renamed next snapshot in memory. Subsequent mutations can overwrite the newer disk snapshot with stale state. This is a state-consistency gap, not a reproduced power-failure claim.
+
+Relevant pinned upstream primary reference findings, previously inspected for REV-STORAGE-01:
+- LuckPerms b93a4d7 SeparatedConfigurateStorage.java uses per-file locks and watcher invalidation for disk-backed users/groups; StorageFactory.java provides SQLite, SQL and file modes. Ambiguous writes must not be ordinary pre-write failures.
+- FerrumC 51830e9 src/lib/storage/src/lmdb.rs uses LMDB write transactions with explicit commit boundaries. Migrating v1 JSON now is much larger and unrelated.
+- EssentialsX e70bdb8 UserData.java uses UUID player data and explicit blocking saves; not a transactional JSON strategy.
+- SteelMC dc8eaba region_manager.rs separates prepared chunks and async region commits; not a drop-in permission data store.
+- Paper/Purpur/Folia scheduling and Horizon networking are not directly relevant to a Rust fsync-after-rename error. Other reviews cover their applicability. Krypton/e4mc/PulseNet are transport-only.
+
+Alternatives: (A) swallow fsync failure (false durability assertion), (B) publish next state but return error (ambiguous retry), (C) rollback rename without durable backup (unreliable), (D) selected: return a phase-tagged write error, poison the live store after any post-replace failure, clear/fail closed permission lookups and suppress stale utilities, prevent further commits, require closing and reopening under the existing writer OS file lock. Errors before rename leave memory intact and subsequent writes operational.
+
+Test criteria: deterministic fault injection before/after rename; disk contains next snapshot after injected directory failure; poisoned permission checks are Undefined and additional writes reject; utility reads hide stale data; successful fresh reopen and v1 format, all baseline Rust regressions, no-JVM/JVM smoke and build. Not a power-loss reproduction, SQLite transactional replacement, new benchmark or full LuckPerms parity. Changes are original AGPL Rust, no third-party code imported. Keep audit in-review until full scope is verified.
+
+
+## REV-STORAGE-02 post-implementation verification (2026-10-23)
+
+The targeted error-phase repair is implemented in src/builtin/permissions.rs and src/builtin/utilities.rs. The shared atomic JSON writer returns a structured phase status identifying whether the rename completed. Directory sync failures AFTER rename poison the store; additional commits fail until the service is dropped and reopened under the same exclusive lock. A permission store invalidates its cache and returns Undefined for all checks when poisoned, preventing use of a stale in-memory authorization. A utility store hides stale home/warp lookups and lists while poisoned. Ordinary errors before rename leave the store writable and unchanged. The JSON v1 schema, atomic replacement and size bound remain unchanged.
+
+Direct verification, not simulated live power failure: two new permission tests inject a before-rename failure and a directory-sync error after the actual rename, exercise a previously warmed Allow result, assert no further writes, inspect exact disk bytes and reopen to the newer snapshot. A utility test injects the same post-rename failure, asserts stale warp lookups/lists cannot be used or overwritten, and reopens the newer disk data. Rust 1.90 test suite is 57/57 passed, formatting and release build passed; the updated real-process persistence smoke verifies second-writer rejection, normal restart, SIGKILL/restart and surviving permissions/homes. Java normal and hung-plugin shutdown fixture also remained green. No new third-party source code was copied.
+
+The chosen behavior rejects live state mutations rather than making a false rollback/durability guarantee, unlike swallowing the error or returning an ambiguous failed commit while retaining write access. It is more conservative than both a full database transaction and silently adopting the renamed in-memory data. The available upstream LuckPerms/FerrumC/EssentialsX/SteelMC file references, alternatives and license analysis are detailed in the preceding pre-implementation section.
+
+REV-STORAGE remains IN_REVIEW. Unverified: real disk/power failure, filesystem-specific directory sync semantics, cross-filesystem rename, NFS/advisory lock cooperation, transactional multi-store consistency, high-volume read/write benchmarks, schema and UUID migrations, SQLite/LMDB data model choice. This patch is not production-grade durability certification or permission semantic parity.

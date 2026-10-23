@@ -68,9 +68,9 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "00349d7f5fce00659dc23311d64fc8937e82e7e8193dc3efa22d80ac3660db45"
+        "src/builtin/permissions.rs": "7a657bbda00f3a1673558eb1069281f46fc03673991e2e2bcc61d8bfecf5bdd3"
       },
-      "design_evidence_partial": "Source touched by REV-STORAGE single-writer hardening; behavior parity review still pending."
+      "design_evidence_partial": "RV-STORAGE-02 changed common implementation; behavior/parity review still pending."
     },
     {
       "id": "REV-UTIL",
@@ -87,10 +87,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/utilities.rs": "96c85b5d59781592aa307e62e7972d494d4a7e96c8170400b781a2925b03102d",
+        "src/builtin/utilities.rs": "6c182dade3321bd2071645a27a4432b741b94938b1a12a4fe254b507d8b14dfa",
         "src/builtin/mod.rs": "a8fef0663045ff45f57938541aa362d0885e841dfafc55d83b0eb9f50a0932e3"
       },
-      "design_evidence_partial": "Source touched by REV-STORAGE single-writer hardening; behavior parity review still pending."
+      "design_evidence_partial": "RV-STORAGE-02 changed common implementation; behavior/parity review still pending."
     },
     {
       "id": "REV-STORAGE",
@@ -108,11 +108,11 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "00349d7f5fce00659dc23311d64fc8937e82e7e8193dc3efa22d80ac3660db45",
-        "src/builtin/utilities.rs": "96c85b5d59781592aa307e62e7972d494d4a7e96c8170400b781a2925b03102d"
+        "src/builtin/permissions.rs": "7a657bbda00f3a1673558eb1069281f46fc03673991e2e2bcc61d8bfecf5bdd3",
+        "src/builtin/utilities.rs": "6c182dade3321bd2071645a27a4432b741b94938b1a12a4fe254b507d8b14dfa"
       },
-      "test_evidence_partial": "54 Rust tests, real simultaneous-two-process denial and successful restart, CRC not tested; full storage durability pending",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md REV-STORAGE before and after comparison"
+      "test_evidence_partial": "57 Rust tests; real 2-process lock, clean/SIGKILL restart and Java lifecycle; deterministic post-rename directory sync failure tests; real power-loss pending",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md REV-STORAGE-02 pre/post code comparisons and failure-state policy"
     },
     {
       "id": "REV-PLUG",

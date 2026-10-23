@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Original native utilities service inspired by common Essentials-style functionality.
 //! Pure data layer only: world validation, teleport, economy and events are not implemented.
-use super::permissions::{atomic_json, lock_store, StoreLock};
+use super::permissions::{atomic_json, lock_store, PersistError, StoreLock};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -57,6 +57,7 @@ pub struct NativeUtilities {
     file: PathBuf,
     _store_lock: StoreLock,
     data: Saved,
+    poisoned: bool,
 }
 fn valid_name(s: &str) -> bool {
     !s.is_empty()
@@ -102,6 +103,7 @@ impl NativeUtilities {
             file,
             _store_lock: store_lock,
             data,
+            poisoned: false,
         })
     }
     fn validate(data: &Saved) -> io::Result<()> {
@@ -143,10 +145,31 @@ impl NativeUtilities {
         Ok(())
     }
     fn commit(&mut self, next: Saved) -> io::Result<()> {
+        self.commit_with(next, atomic_json)
+    }
+    fn commit_with(
+        &mut self,
+        next: Saved,
+        save: impl FnOnce(&Path, &Saved) -> Result<(), PersistError>,
+    ) -> io::Result<()> {
+        if self.poisoned {
+            return Err(io::Error::other(
+                "utility store requires restart after ambiguous write",
+            ));
+        }
         Self::validate(&next)?;
-        atomic_json(&self.file, &next)?;
-        self.data = next;
-        Ok(())
+        match save(&self.file, &next) {
+            Ok(()) => {
+                self.data = next;
+                Ok(())
+            }
+            Err(failure) => {
+                if failure.replaced {
+                    self.poisoned = true;
+                }
+                Err(failure.cause)
+            }
+        }
     }
     pub fn set_warp(&mut self, name: &str, pos: Position) -> io::Result<()> {
         let name = normalize(name)?;
@@ -163,9 +186,15 @@ impl NativeUtilities {
         Ok(removed)
     }
     pub fn warp(&self, name: &str) -> Option<&Position> {
+        if self.poisoned {
+            return None;
+        }
         self.data.warps.get(&name.to_ascii_lowercase())
     }
     pub fn list_warps(&self) -> Vec<&str> {
+        if self.poisoned {
+            return Vec::new();
+        }
         self.data.warps.keys().map(String::as_str).collect()
     }
     pub fn set_home(&mut self, user: &str, name: &str, pos: Position) -> io::Result<()> {
@@ -176,12 +205,18 @@ impl NativeUtilities {
         self.commit(next)
     }
     pub fn home(&self, user: &str, name: &str) -> Option<&Position> {
+        if self.poisoned {
+            return None;
+        }
         self.data
             .homes
             .get(&user.to_ascii_lowercase())?
             .get(&name.to_ascii_lowercase())
     }
     pub fn list_homes(&self, user: &str) -> Vec<&str> {
+        if self.poisoned {
+            return Vec::new();
+        }
         self.data
             .homes
             .get(&user.to_ascii_lowercase())
@@ -255,6 +290,35 @@ mod tests {
         let second = NativeUtilities::open(&path).unwrap();
         assert_eq!(second.warp("spawn"), Some(&location));
         drop(second);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn post_rename_error_blocks_stale_reads_and_writes_until_reopen() {
+        let (path, mut db) = service();
+        let old = Position::new("world", 1.0, 64.0, 2.0).unwrap();
+        let newer = Position::new("world", 9.0, 65.0, 9.0).unwrap();
+        db.set_warp("spawn", old).unwrap();
+        let mut next = db.data.clone();
+        next.warps.insert("spawn".into(), newer.clone());
+        let error = db
+            .commit_with(next, |file, value| {
+                crate::builtin::permissions::atomic_json_with_sync(file, value, |_| {
+                    Err(io::Error::other("injected post-rename sync failure"))
+                })
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("post-rename"));
+        assert!(db.poisoned);
+        assert!(db.warp("spawn").is_none());
+        assert!(db.list_warps().is_empty());
+        let disk = fs::read(&path).unwrap();
+        assert!(db.set_warp("spawn", newer.clone()).is_err());
+        assert_eq!(fs::read(&path).unwrap(), disk);
+        drop(db);
+        let fresh = NativeUtilities::open(&path).unwrap();
+        assert_eq!(fresh.warp("spawn"), Some(&newer));
+        drop(fresh);
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json.lock"));
     }

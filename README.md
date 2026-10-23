@@ -126,3 +126,17 @@ full fault-injection/power-loss validation or migrations.
 
 Build a release binary and run python3 scripts/test_single_writer.py to
 verify real-process exclusion and restart persistence.
+
+
+### Ambiguous snapshot-write failure handling
+
+An error after atomic rename, such as a directory-sync failure, may have
+already changed the on-disk snapshot. Both native stores now mark themselves
+unusable for further mutations until restarted/reopened, rather than risk
+overwriting the new disk data with stale state. Permission checks return
+Undefined (deny) and home/warp lookups hide stale locations while the store
+is in this state. Errors before file replacement remain retryable.
+
+This was tested with injected errors on the real JSON writer, and separately
+with a clean and SIGKILL server restart. It does not prove resilience to a
+real power cut during an unsafe filesystem or across distributed stores.
