@@ -3,6 +3,12 @@ mod command;
 mod native;
 mod plugins;
 mod protocol;
+
+// Limit console command ingress and work per tick. Player command and
+// suggestion queues will have separate capacities when login is implemented.
+const MAX_CONSOLE_COMMANDS_QUEUED: usize = 1024;
+const MAX_CONSOLE_COMMANDS_PER_TICK: usize = 128;
+
 use std::{
     env,
     io::{self, Write},
@@ -45,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     plugins.register_commands(&mut commands);
     let permissions = command::Grants::default();
     let started = Instant::now();
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::sync_channel(MAX_CONSOLE_COMMANDS_QUEUED);
     thread::spawn(move || {
         let mut s = String::new();
         loop {
@@ -73,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
             Err(e) => eprintln!("accept: {e}"),
         }
-        while let Ok(cmd) = rx.try_recv() {
+        for cmd in rx.try_iter().take(MAX_CONSOLE_COMMANDS_PER_TICK) {
             let plugins_info = plugins.info();
             let snapshot = command::Snapshot {
                 version: "Purpur-Horizon 0.1.0 (command prototype)",
@@ -177,6 +183,32 @@ fn serve(mut socket: TcpStream, motd: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bounded_console_work_never_drains_all_pending_commands_in_one_tick() {
+        let (sender, receiver) = mpsc::sync_channel::<String>(MAX_CONSOLE_COMMANDS_QUEUED);
+        for n in 0..200 {
+            sender.try_send(n.to_string()).unwrap();
+        }
+        let first_tick: Vec<_> = receiver
+            .try_iter()
+            .take(MAX_CONSOLE_COMMANDS_PER_TICK)
+            .collect();
+        assert_eq!(first_tick.len(), MAX_CONSOLE_COMMANDS_PER_TICK);
+        assert_eq!(first_tick[0], "0");
+        let remaining: Vec<_> = receiver.try_iter().collect();
+        assert_eq!(remaining.len(), 72);
+        assert_eq!(remaining[0], "128");
+    }
+    #[test]
+    fn bounded_console_queue_rejects_excess_without_growth() {
+        let (sender, _receiver) = mpsc::sync_channel::<u8>(2);
+        sender.try_send(1).unwrap();
+        sender.try_send(2).unwrap();
+        assert!(matches!(
+            sender.try_send(3),
+            Err(mpsc::TrySendError::Full(3))
+        ));
+    }
     #[test]
     fn status_ping() {
         let server = TcpListener::bind("127.0.0.1:0").unwrap();

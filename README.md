@@ -66,3 +66,11 @@ provider is scaffolded; no players may connect yet and persistence/LuckPerms
 integration are planned.
 
 See docs/ROADMAP.md, docs/LICENSING.md and THIRD_PARTY_NOTICES.md.
+
+## Source comparison and optimized architecture
+
+See docs/REFERENCE_ARCHITECTURE_RESEARCH_2026-10-23.md for detailed architecture evidence and roadmap decisions. The new command-tree projection is protocol-neutral, source/permission-filtered and versioned; it is not yet transmitted to a client. Console ingress is capped at 1,024 pending commands with at most 128 executed per tick, providing explicit resource bounds rather than a measured throughput claim.
+
+A live console diagnostic command, commandtree, reports the permission-filtered
+registry projection's node count, revision and validity. This is explicitly
+not the Minecraft command-tree wire packet or client gameplay support.

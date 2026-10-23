@@ -9,3 +9,5 @@ These are read-only upstream HEAD snapshots captured on October 23, 2026. They a
 | [LuckPerms](https://github.com/LuckPerms/LuckPerms/tree/b93a4d7b24fbcb97170e355d651984493ab64e79) | master | b93a4d7b24fbcb97170e355d651984493ab64e79 | MIT |
 | [EssentialsX](https://github.com/EssentialsX/Essentials/tree/e70bdb817c758474acb3a23a37cf961b2f716a50) | 2.x | e70bdb817c758474acb3a23a37cf961b2f716a50 | GPLv3 |
 | [Folia](https://github.com/PaperMC/Folia/tree/8cffa9059ad6bbc2b28510c38ed61a51098d4971) | ver/26.3.x | 8cffa9059ad6bbc2b28510c38ed61a51098d4971 | GPLv3 patches |
+| [Purpur](https://github.com/PurpurMC/Purpur/tree/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0) | ver/26.3 | 5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0 | MIT |
+| [Horizon](https://github.com/ludovic111/horizon/tree/e325fa65878071d5c9076e908e9a4adb258b3313) | main | e325fa65878071d5c9076e908e9a4adb258b3313 | MIT |

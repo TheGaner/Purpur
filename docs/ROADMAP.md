@@ -15,6 +15,10 @@ Gate: distributable release runs without Horizon engine/Java server dependencies
 - [x] Console help, help details, version, stop, uptime, tps (target only), echo, plugins.
 - [x] Word, bounded integer, greedy arguments; contextual permission checks with default deny.
 - [x] Optional native Rust ABI command declarations and demo plugin dispatch.
+- [x] C-01: Deterministic, permission-filtered, versioned Brigadier-style protocol-neutral graph with canonical alias redirects, typed arguments and bounded registration; 10 new Rust tests. NOT a wire Commands packet encoder.
+- [x] C-02: Bounded console command backlog (1,024) and per-tick dispatch cap (128), with overflow/tick regression tests. Player commands and suggestions still require separate queues.
+- [ ] C-03: LuckPerms-style tri-state contextual permission snapshot/caching model with explicit invalidation; profile before optimizing.
+- [ ] C-04: Encode protocol 777 Commands packet and implement real player command/suggestion inbound handlers (depends on Horizon login).
 - [ ] Persistent groups, nodes, expiring grants, LuckPerms-style contexts and metadata/caching.
 - [ ] Real player command ingress, Brigadier command tree and suggestions, client packet replies.
 - [ ] Selectors, coordinates, resource IDs, NBT, complex arguments, async command tasks.
@@ -64,3 +68,9 @@ Gate: deterministic cross-region packet/entity/command tests and measurable gain
 - [ ] CI and release matrix with honest feature parity report.
 
 References: PurpurMC/Purpur; ludovic111/horizon; EssentialsX/Essentials; LuckPerms/LuckPerms; Steel-Foundation/SteelMC; ferrumc-rs/ferrumc; PaperMC/Folia.
+
+## 2026-10-23 architecture research checkpoint
+
+Source implementation comparison and recommendation: docs/REFERENCE_ARCHITECTURE_RESEARCH_2026-10-23.md. Research confirmed Paper/Steel command-tree semantics, Steel generation-stage and queue designs, Folia region ownership, LuckPerms cache invalidation, Horizon WASM host budgets, and EssentialsX command reliance on Bukkit/Paper events.
+
+Initial baseline 16/16 tests; after C-01/C-02 the repository has 26 tests passing at the first implementation checkpoint. No real-world performance improvement or Java/Purpur behavioral parity has been established. Next unblocked work is C-03 or network status/login scaffolding; prioritize C-03 only if it does not delay a first real Horizon player connection.

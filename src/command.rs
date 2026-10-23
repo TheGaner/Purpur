@@ -2,6 +2,7 @@
 //! Standalone Brigadier-inspired command registry foundation.
 //! No Java, Bukkit or client-engine dependency. Not full vanilla command parity.
 use std::collections::{HashMap, HashSet};
+pub mod tree;
 use std::time::Duration;
 const MAX_LINE: usize = 4096;
 const MAX_TOKENS: usize = 128;
@@ -223,6 +224,7 @@ pub enum Builtin {
     Plugins,
     Uptime,
     Tps,
+    Tree,
     Echo,
 }
 #[derive(Clone, Debug)]
@@ -258,6 +260,7 @@ pub struct Snapshot<'a> {
 pub struct Registry {
     commands: HashMap<String, Command>,
     routes: HashMap<String, String>,
+    revision: u64,
 }
 fn valid_name(name: &str) -> bool {
     if name == "?" {
@@ -305,6 +308,12 @@ impl Registry {
                 Builtin::Tps,
             ),
             (
+                "commandtree",
+                vec![],
+                "Inspect the permission-filtered command graph (not a client packet)",
+                Builtin::Tree,
+            ),
+            (
                 "echo",
                 vec![],
                 "Echo text to the command source",
@@ -339,6 +348,11 @@ impl Registry {
         reg
     }
     pub fn register(&mut self, spec: Command) -> Result<(), Error> {
+        // Bounded registry and command tree size; plugin manifests must not
+        // allocate an unbounded node graph on player join.
+        if self.commands.len() >= 1024 || spec.aliases.len() > 32 || spec.parameters.len() > 64 {
+            return Err(Error::TooLong);
+        }
         let name = spec.name.to_ascii_lowercase();
         let aliases: Vec<_> = spec
             .aliases
@@ -383,6 +397,7 @@ impl Registry {
             self.routes.insert(label, name.clone());
         }
         self.commands.insert(name, spec);
+        self.revision = self.revision.wrapping_add(1);
         Ok(())
     }
     pub fn unregister_owner(&mut self, owner: &str) -> usize {
@@ -405,7 +420,21 @@ impl Registry {
                 }
             }
         }
+        if !owned.is_empty() {
+            self.revision = self.revision.wrapping_add(1);
+        }
         owned.len()
+    }
+    /// Permission-filtered deterministic command graph. This intentionally
+    /// does not perform wire serialization or cache potentially stale grants.
+    pub fn project(&self, source: &Source<'_>, permissions: &dyn Permissions) -> tree::Projection {
+        let visible = self
+            .commands
+            .iter()
+            .filter(|(_, command)| source.has(&command.permission, permissions))
+            .map(|(name, command)| (name.as_str(), command))
+            .collect();
+        tree::build(self.revision, visible)
     }
     pub fn visible(&self, source: &Source<'_>, permissions: &dyn Permissions) -> Vec<String> {
         let mut items: Vec<_> = self
@@ -517,7 +546,9 @@ impl Registry {
                 }
             }
         }
-        if !matches!(spec.handler, Handler::Plugin { .. }) && idx < args.len() {
+        if idx < args.len()
+            && !(matches!(spec.handler, Handler::Plugin { .. }) && spec.parameters.is_empty())
+        {
             return Err(Error::Usage(Self::usage(spec)));
         }
         let mut reply = Reply {
@@ -566,6 +597,14 @@ impl Registry {
                     "Target TPS: 20; tick: {} (measured TPS not implemented)",
                     snapshot.tick
                 )),
+                Builtin::Tree => {
+                    let tree = self.project(source, permissions);
+                    let valid = tree.validate().is_ok();
+                    reply.lines.push(format!(
+                        "Command tree: {} nodes, {} root labels, registry revision {}, valid: {} (protocol-neutral only)",
+                        tree.nodes.len(), tree.labels().len(), tree.registry_revision, valid
+                    ));
+                }
                 Builtin::Echo => reply.lines.push(values.join(" ")),
             },
         }
@@ -763,6 +802,86 @@ mod tests {
         g.add_group("steve", "admin");
         assert!(g.allowed("steve", "worldedit.fill", Some("minecraft:overworld")));
         assert!(!g.allowed("steve", "worldedit.fill", Some("minecraft:the_nether")));
+    }
+    #[test]
+    fn commandtree_console_diagnostic_uses_live_registry() {
+        let mut r = Registry::builtins();
+        let initial = r
+            .execute(
+                "commandtree",
+                &Source::Console,
+                &Grants::default(),
+                &state(),
+            )
+            .unwrap()
+            .lines;
+        assert!(initial[0].contains("valid: true"));
+        r.register(Command {
+            name: "demo:ping".into(),
+            aliases: vec![],
+            permission: "demo.ping".into(),
+            description: "demo".into(),
+            parameters: vec![],
+            handler: Handler::Plugin {
+                owner: "demo".into(),
+            },
+        })
+        .unwrap();
+        let updated = r
+            .execute(
+                "commandtree",
+                &Source::Console,
+                &Grants::default(),
+                &state(),
+            )
+            .unwrap()
+            .lines;
+        assert_ne!(initial, updated);
+    }
+    #[test]
+    fn registered_typed_plugin_rejects_extra_arguments() {
+        let mut r = Registry::default();
+        r.register(Command {
+            name: "typed".into(),
+            aliases: vec![],
+            permission: "example.typed".into(),
+            description: "demo".into(),
+            parameters: vec![Parameter {
+                label: "number",
+                kind: Argument::Integer { min: 0, max: 10 },
+                optional: false,
+            }],
+            handler: Handler::Plugin {
+                owner: "demo".into(),
+            },
+        })
+        .unwrap();
+        let p = Grants::default();
+        assert!(r.execute("typed 4", &Source::Console, &p, &state()).is_ok());
+        assert_eq!(
+            r.execute("typed 4 extra", &Source::Console, &p, &state())
+                .err(),
+            Some(Error::Usage("/typed <number>".into()))
+        );
+    }
+    #[test]
+    fn registration_rejects_oversized_metadata_without_mutation() {
+        let mut r = Registry::default();
+        let value = Command {
+            name: "example".into(),
+            aliases: (0..33).map(|i| format!("alias{i}")).collect(),
+            permission: "demo".into(),
+            description: "demo".into(),
+            parameters: vec![],
+            handler: Handler::Plugin {
+                owner: "demo".into(),
+            },
+        };
+        assert_eq!(r.register(value), Err(Error::TooLong));
+        assert!(r
+            .project(&Source::Console, &Grants::default())
+            .labels()
+            .is_empty());
     }
     #[test]
     fn integer_bounds_are_checked() {

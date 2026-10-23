@@ -20,3 +20,7 @@
 7. Horizon client opt-in authentication/identity handshake; strict reject non-Horizon client.
 
 Command layer uses the new standalone src/command.rs registry; source license is AGPL-3.0-or-later. See docs/ROADMAP.md, docs/LICENSING.md and THIRD_PARTY_NOTICES.md.
+
+## Architecture research decision, 2026-10-23
+
+The Rust command graph is deterministic and source-filtered, but intentionally remains independent of network serialization while no player login/play runtime exists. The future command path uses versioned immutable graph snapshots and permission/context revisions, with bounded tick queues. See docs/REFERENCE_ARCHITECTURE_RESEARCH_2026-10-23.md.
