@@ -40,7 +40,7 @@
       "test_evidence_partial": "65 Rust tests; status-only worker 3.035s baseline vs ~1.02s one-second grace; immediate and 180ms delayed Pong, real process smoke",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-02 source comparisons and post-code tradeoffs",
       "current_sha256": {
-        "src/main.rs": "d82dea049da17b8005c6709474a264569a5b3093a23aab4442d8295e2466be30"
+        "src/main.rs": "7247c2c47f027dfa7b4395b6498ba8c84e80434483d7fd2b9696af829f8e5217"
       }
     },
     {
@@ -154,7 +154,7 @@
     },
     {
       "id": "REV-TICK",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/main.rs"
       ],
@@ -166,8 +166,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/main.rs": "d82dea049da17b8005c6709474a264569a5b3093a23aab4442d8295e2466be30"
-      }
+        "src/main.rs": "7247c2c47f027dfa7b4395b6498ba8c84e80434483d7fd2b9696af829f8e5217"
+      },
+      "test_evidence_partial": "74 Rust tests; 17ms slow callback reproducer failed on old count-only queue, passes with cooperative 10ms cutoff; stop and zero-budget FIFO tests; release and integration smokes. Actual simulation TPS unverified.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-TICK-01 SteelMC/Paper/Folia source comparison, decisions and validation"
     },
     {
       "id": "REV-LEGAL",

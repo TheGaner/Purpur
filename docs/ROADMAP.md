@@ -30,6 +30,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [ ] RV-PLUG: Audit native ABI safety, plugin lifecycle and Java bridge against Horizon Wasmtime, Paper/Purpur/Folia and upstream plugin needs; fix unsafe metadata pointer scan and potential blocking shutdown.
   - [x] RV-PLUG-01: Compare Horizon Wasmtime, Paper Java lifecycle, FerrumC stub and SteelMC command API; remove unbounded native manifest pointer scan with host-owned v2 buffer and cap Java child shutdown, unit/runtime fixtures; wider REV-PLUG still IN_REVIEW.
 - [ ] RV-TICK: Audit command work budgets, tick behavior and future ownership against Folia/Paper and SteelMC.
+  - [x] RV-TICK-01: Compare pinned SteelMC command queues, Paper tick schedules and official Folia independent region deadlines; reproduce slow-command tick monopolization and add a cooperative 10ms/128-command console budget with pre-dequeue cutoff, Stop/FIFO and zero-budget progress tests (74 Rust tests). Full REV-TICK IN_REVIEW.
 - [ ] RV-LEGAL: Complete per-dependency SPDX/license inventory, notices, generated assets, copied-source policy and distribution/source offer.
 - [ ] RV-CLOSE: All retrospective rows APPROVED with current source digests, named source-code citations, reproducible verification and decision records. The review gate must pass; only then unfreeze new feature work.
 
@@ -191,3 +192,8 @@ RV-CMD-01 advanced the Phase -1 command audit without unfreezing new gameplay. T
 ## 2026-10-23 imported utilities v1 JSON compatibility checkpoint
 
 RV-UTIL-01 completed targeted retrospective correctness hardening. Previously valid uppercase legacy home/warp/user map keys were invisible to lowercase lookups and could coexist with lowercase aliases after a later save. NativeUtilities now casefolds unambiguous v1 keys on open, rejects collisions in all three namespaces, and preserves original world identifiers/coordinate values. New tests raised the Rust suite to 71 passing; an actual server process imported, read and rewrote a legacy file and rejected an intentionally ambiguous warp on restart. This remains a names-based persistent console data subset with no actual EssentialsX teleport, UUID authentication or Folia owner-affine scheduling. The mandatory Phase -1 review hold remains active; source comparison and evidence in docs/IMPLEMENTATION_REFERENCE_AUDIT.md.
+
+
+## 2026-10-23 tick console fairness checkpoint
+
+RV-TICK-01 performed source-backed review and corrected the console work-count-only bound. A synthetic 17ms callback previously allowed subsequent queued messages to execute in the same tick; after the fix a cooperative 10ms console work deadline preserves the backlog without dequeuing unprocessed commands. The 128 request/tick cap remains, and one pending command can always progress. 74 Rust tests and a release build passed. This does NOT preempt a slow plugin callback, guarantee actual 20 TPS, or implement Folia region scheduling; see docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Mandatory retrospective gate remains active.

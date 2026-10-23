@@ -10,6 +10,8 @@ mod protocol;
 // suggestion queues will have separate capacities when login is implemented.
 const MAX_CONSOLE_COMMANDS_QUEUED: usize = 1024;
 const MAX_CONSOLE_COMMANDS_PER_TICK: usize = 128;
+// A cooperative policy: one blocking command can still overrun its tick.
+const MAX_CONSOLE_TIME_PER_TICK: Duration = Duration::from_millis(10);
 
 use std::{
     env,
@@ -20,6 +22,30 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+/// Drains a bounded number of console commands for the current tick.
+/// false means the handler requested server shutdown.
+fn drain_console_commands<F>(
+    rx: &mpsc::Receiver<String>,
+    time_budget: Duration,
+    mut handle: F,
+) -> bool
+where
+    F: FnMut(String) -> bool,
+{
+    let started = Instant::now();
+    for index in 0..MAX_CONSOLE_COMMANDS_PER_TICK {
+        // Do not dequeue work we cannot handle this tick. Allow at least one
+        // pending command to make progress even when the clock is delayed.
+        if index > 0 && started.elapsed() >= time_budget {
+            break;
+        }
+        let Ok(cmd) = rx.try_recv() else { break };
+        if !handle(cmd) {
+            return false;
+        }
+    }
+    true
+}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bind = String::from("127.0.0.1:25565");
     let mut motd = String::from("Purpur-Horizon in Rust (experimental)");
@@ -126,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut next = Instant::now();
     let mut tick = 0u64;
     loop {
-        for cmd in rx.try_iter().take(MAX_CONSOLE_COMMANDS_PER_TICK) {
+        if !drain_console_commands(&rx, MAX_CONSOLE_TIME_PER_TICK, |cmd| {
             let plugins_info = plugins.info();
             let snapshot = command::Snapshot {
                 version: "Purpur-Horizon 0.1.0 (command prototype)",
@@ -141,7 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     match reply.effect {
                         command::Effect::None => {}
-                        command::Effect::Stop => return Ok(()),
+                        command::Effect::Stop => return false,
                         command::Effect::Core { command, args } => {
                             match builtin::dispatch(
                                 &command,
@@ -165,6 +191,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(command::Error::Empty) => {}
                 Err(error) => eprintln!("[command] {error}"),
             }
+            true
+        }) {
+            return Ok(());
         }
         plugins.event(2, tick, "");
         tick += 1;
@@ -267,15 +296,84 @@ mod tests {
         for n in 0..200 {
             sender.try_send(n.to_string()).unwrap();
         }
-        let first_tick: Vec<_> = receiver
-            .try_iter()
-            .take(MAX_CONSOLE_COMMANDS_PER_TICK)
-            .collect();
+        let mut first_tick = Vec::new();
+        assert!(drain_console_commands(
+            &receiver,
+            Duration::from_secs(1),
+            |cmd| {
+                first_tick.push(cmd);
+                true
+            }
+        ));
         assert_eq!(first_tick.len(), MAX_CONSOLE_COMMANDS_PER_TICK);
         assert_eq!(first_tick[0], "0");
         let remaining: Vec<_> = receiver.try_iter().collect();
         assert_eq!(remaining.len(), 72);
         assert_eq!(remaining[0], "128");
+    }
+    #[test]
+    fn slow_console_handler_defers_remaining_commands_to_next_tick() {
+        let (sender, receiver) = mpsc::sync_channel::<String>(8);
+        for command in ["slow", "second", "third"] {
+            sender.try_send(command.into()).unwrap();
+        }
+        let mut handled = Vec::new();
+        assert!(drain_console_commands(
+            &receiver,
+            MAX_CONSOLE_TIME_PER_TICK,
+            |command| {
+                if command == "slow" {
+                    thread::sleep(Duration::from_millis(17));
+                }
+                handled.push(command);
+                true
+            }
+        ));
+        assert_eq!(handled, vec!["slow"]);
+        assert_eq!(receiver.try_recv().unwrap(), "second");
+        assert_eq!(receiver.try_recv().unwrap(), "third");
+    }
+    #[test]
+    fn zero_console_time_budget_preserves_fifo_and_progress() {
+        let (sender, receiver) = mpsc::sync_channel::<String>(4);
+        for message in ["one", "two", "three"] {
+            sender.try_send(message.to_owned()).unwrap();
+        }
+        let mut completed = Vec::new();
+        assert!(drain_console_commands(&receiver, Duration::ZERO, |cmd| {
+            completed.push(cmd);
+            true
+        }));
+        assert_eq!(completed, vec!["one"]);
+        let mut later = Vec::new();
+        assert!(drain_console_commands(
+            &receiver,
+            Duration::from_secs(1),
+            |cmd| {
+                later.push(cmd);
+                true
+            }
+        ));
+        assert_eq!(later, vec!["two", "three"]);
+    }
+    #[test]
+    fn console_shutdown_does_not_consume_later_queued_commands() {
+        let (sender, receiver) = mpsc::sync_channel::<String>(4);
+        for command in ["first", "stop", "remaining"] {
+            sender.try_send(command.into()).unwrap();
+        }
+        let mut handled = Vec::new();
+        assert!(!drain_console_commands(
+            &receiver,
+            Duration::from_secs(1),
+            |command| {
+                let stop = command == "stop";
+                handled.push(command);
+                !stop
+            }
+        ));
+        assert_eq!(handled, vec!["first", "stop"]);
+        assert_eq!(receiver.try_recv().unwrap(), "remaining");
     }
     #[test]
     fn bounded_console_queue_rejects_excess_without_growth() {

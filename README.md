@@ -213,3 +213,16 @@ InvalidData startup error; records are NOT silently merged or discarded.
 Canonical names are persisted after the next successful mutation.
 World identifiers and coordinates remain unchanged. This is not a real
 teleport service or authenticated UUID ownership implementation.
+
+
+### Cooperative console command time budget
+
+The simulation tick targets 20 Hz, but gameplay simulation and actual TPS
+reporting are not implemented. Console command processing is bounded by
+1,024 waiting messages, at most 128 handled per tick, and a new cooperative
+10ms wall-clock time budget: after a handler returns, the loop checks the
+deadline before dequeuing more commands. This preserves queued commands
+instead of silently dropping them, including after an expensive action.
+At least one pending command may make progress each tick; a single blocking
+native/plugin callback can still take longer than 10ms. This is not strict
+real-time isolation or complete Folia/Paper scheduler behavior.
