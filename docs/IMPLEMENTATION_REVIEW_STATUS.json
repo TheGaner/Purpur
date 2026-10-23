@@ -68,10 +68,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "6e674d8de82e67c5dd8d68bc5d2755fffd1e64d98a2a86edf4a14cd3aa9714c3"
+        "src/builtin/permissions.rs": "ac4ffede3639bb61a984a238a1e384a86050dd45d598ad34dd045fca0dfe875c"
       },
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PERM-02 source comparison and post-implementation review",
-      "test_evidence_partial": "62 Rust tests; failing-before/fixed-after graph saturation and persisted subject namespace regressions; actual LuckPerms parity pending"
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PERM-03 before/after source comparison and typed console identity decision",
+      "test_evidence_partial": "63 Rust tests (failing-before namespace alias regression), qualified user/group admin smoke across clean and SIGKILL restarts; LuckPerms parity pending"
     },
     {
       "id": "REV-UTIL",
@@ -109,7 +109,7 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/permissions.rs": "6e674d8de82e67c5dd8d68bc5d2755fffd1e64d98a2a86edf4a14cd3aa9714c3",
+        "src/builtin/permissions.rs": "ac4ffede3639bb61a984a238a1e384a86050dd45d598ad34dd045fca0dfe875c",
         "src/builtin/utilities.rs": "6c182dade3321bd2071645a27a4432b741b94938b1a12a4fe254b507d8b14dfa"
       },
       "test_evidence_partial": "57 Rust tests; real 2-process lock, clean/SIGKILL restart and Java lifecycle; deterministic post-rename directory sync failure tests; real power-loss pending",

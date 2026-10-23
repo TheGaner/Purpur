@@ -19,6 +19,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [ ] RV-PERM: Compare native Rust permissions to LuckPerms calculator, graph, contexts, cache and persistence, plus relevant SteelMC/Paper semantics.
   - [x] RV-PERM-01: Compare pinned LuckPerms calculator, cache, storage and SteelMC group snapshots; fix mixed-case legacy subject/group access and migrate unambiguous v1 names in memory while refusing colliding identities. Three tests, 60 total passed. Broader REV-PERM remains IN_REVIEW.
   - [x] RV-PERM-02: Reproduce partial Allow on group ancestry saturation and cross-user inherited grants through malformed JSON; return Undefined on over-limit traversal and reject invalid subject/parent namespaces on open. 62 Rust tests passed; full REV-PERM still IN_REVIEW.
+  - [x] RV-PERM-03: Review and fix console typed identity aliases (user:alex / alex and group:staff / staff), without crossing namespaces; reject nested or invalid groups and verify real process clean/crash restarts. Full LuckPerms semantics still IN_REVIEW.
 - [ ] RV-UTIL: Compare homes/warps and planned player actions against EssentialsX, Bukkit/Paper, and Folia owner-affine teleport.
 - [ ] RV-STORAGE: Audit JSON persistence durability and scaling against LuckPerms/EssentialsX and SteelMC/FerrumC before choosing a database design.
   - [x] RV-STORAGE-01: Source compare pinned LuckPerms per-path locks and backends, EssentialsX UUID player files, FerrumC LMDB and SteelMC region storage; implement single-writer JSON safety, durable-rename improvements, output-size cap and real two-process persistence tests. The broader storage review remains IN_REVIEW.
@@ -167,3 +168,8 @@ RV-PERM-01 closed as a focused correctness fix after RV-STORAGE-02. Case-insensi
 ## 2026-10-23 bounded permission graph security checkpoint
 
 RV-PERM-02: confirmed and fixed two inherited-permission safety bugs using failing-before/passing-after tests. A graph larger than 128 reachable subjects can no longer produce an Allow based on partial traversal, and manually persisted parent links that cross from group inheritance into another user identity are rejected. The JSON v1 file format is preserved. 62 Rust tests pass; these results cover the prototype's fail-closed behavior, not full LuckPerms or SteelMC semantic equivalence. Full review gate remains ACTIVE; pinned source comparisons and unverified cases are in docs/IMPLEMENTATION_REFERENCE_AUDIT.md.
+
+
+## 2026-10-23 scoped permission namespace checkpoint
+
+RV-PERM-03 fixed previously confirmed typed principal inconsistencies. The old evaluator looked up user:user:alex after a console grant for user:alex, and the parent updater constructed group:group:staff when passed group:staff. A single validated one-prefix parser now preserves consistent user-only lookups, typed group parent aliases and fail-closed invalid input. Unit tests and real-console restart verification cover the change, not authenticated identities or full LuckPerms precedence. The mandatory Phase -1 cross-server source review remains active, and the code stays pre-playable. Details and source references: docs/IMPLEMENTATION_REFERENCE_AUDIT.md.

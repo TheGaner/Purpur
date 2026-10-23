@@ -166,3 +166,15 @@ inheritance and identity namespaces fail startup instead of being followed.
 These are safety boundaries, not LuckPerms-compatible context, weight or
 default-group semantics. Large legitimate inheritance graphs may be denied
 until the cap is redesigned and tested against a reference oracle.
+
+
+### Typed console permission identifiers
+
+Built-in permission console commands accept a legacy user as alex or
+user:alex; both refer to the same stored user subject, case-insensitively.
+Group rules can be edited using group:staff, and parent/unparent commands
+accept a group argument of staff or group:staff. A user permission check
+will never reinterpret group:staff as a user with group authority; malformed
+or doubly qualified names are rejected. These inputs are administrative
+labels only, not authenticated identities for online players. Actual
+Horizon login/authenticated UUIDs and LuckPerms parity remain pending.

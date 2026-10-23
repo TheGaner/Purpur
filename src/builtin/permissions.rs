@@ -105,13 +105,35 @@ pub struct NativePermissions {
 }
 // Store identities in disjoint namespaces so player UUIDs/names never
 // resolve as group subjects, even if a remote client supplies "group:admin".
-fn config_subject(subject: &str) -> String {
-    let canonical = subject.to_ascii_lowercase();
-    if canonical.starts_with("group:") || canonical.starts_with("user:") {
-        canonical
+// Console-only legacy name grammar. No caller-supplied string is proof of a
+// Minecraft player's authenticated identity; future play must use UUIDs.
+fn canonical_name(input: &str) -> Option<String> {
+    (valid_id(input) && !input.contains(':')).then(|| input.to_ascii_lowercase())
+}
+fn typed_subject(input: &str, default_namespace: &str) -> Option<String> {
+    let (namespace, raw) = if let Some(name) = input.strip_prefix("user:") {
+        ("user", name)
+    } else if let Some(name) = input.strip_prefix("group:") {
+        ("group", name)
     } else {
-        format!("user:{canonical}")
-    }
+        (default_namespace, input)
+    };
+    let name = canonical_name(raw)?;
+    let subject = format!("{namespace}:{name}");
+    valid_subject_key(&subject).then_some(subject)
+}
+fn config_subject(subject: &str) -> Option<String> {
+    typed_subject(subject, "user")
+}
+fn user_subject(subject: &str) -> Option<String> {
+    // Explicitly refuse a group principal in a player check; this prevents
+    // a future untrusted login name from being interpreted as a group grant.
+    let subject = typed_subject(subject, "user")?;
+    subject.starts_with("user:").then_some(subject)
+}
+fn group_subject(group: &str) -> Option<String> {
+    let group = typed_subject(group, "group")?;
+    group.starts_with("group:").then_some(group)
 }
 fn valid_id(s: &str) -> bool {
     !s.is_empty()
@@ -123,10 +145,12 @@ fn valid_subject_key(subject: &str) -> bool {
     subject
         .strip_prefix("user:")
         .or_else(|| subject.strip_prefix("group:"))
-        .is_some_and(valid_id)
+        .is_some_and(|name| valid_id(name) && !name.contains(':'))
 }
 fn valid_group_link(subject: &str) -> bool {
-    subject.strip_prefix("group:").is_some_and(valid_id)
+    subject
+        .strip_prefix("group:")
+        .is_some_and(|name| valid_id(name) && !name.contains(':'))
 }
 fn valid_node(s: &str) -> bool {
     (s == "*" || valid_id(s) || (s.ends_with(".*") && valid_id(&s[..s.len() - 2])))
@@ -372,8 +396,11 @@ impl NativePermissions {
                 "invalid principal/node/world",
             ));
         }
+        let subject = config_subject(principal).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "invalid subject namespace")
+        })?;
         let mut next = self.data.clone();
-        let entries = next.grants.entry(config_subject(principal)).or_default();
+        let entries = next.grants.entry(subject).or_default();
         entries.retain(|r| !(r.node == normalized_node && r.world.as_deref() == world));
         if decision != Decision::Undefined {
             entries.push(Rule {
@@ -392,18 +419,27 @@ impl NativePermissions {
                 "invalid principal/group",
             ));
         }
+        let subject = config_subject(principal)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid parent subject"))?;
+        let link = group_subject(group).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "invalid group namespace")
+        })?;
         let mut next = self.data.clone();
-        let link = format!("group:{}", group.to_ascii_lowercase());
-        let groups = next.parents.entry(config_subject(principal)).or_default();
+        let groups = next.parents.entry(subject).or_default();
         if !groups.contains(&link) {
             groups.push(link);
         }
         self.commit(next)
     }
     pub fn remove_parent(&mut self, principal: &str, group: &str) -> io::Result<()> {
+        let subject = config_subject(principal)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid parent subject"))?;
+        let link = group_subject(group).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "invalid group namespace")
+        })?;
         let mut next = self.data.clone();
-        if let Some(groups) = next.parents.get_mut(&config_subject(principal)) {
-            groups.retain(|g| g != &format!("group:{}", group.to_ascii_lowercase()));
+        if let Some(groups) = next.parents.get_mut(&subject) {
+            groups.retain(|g| g != &link);
         }
         self.commit(next)
     }
@@ -416,8 +452,11 @@ impl NativePermissions {
         if self.poisoned {
             return Decision::Undefined;
         }
+        let Some(user) = user_subject(principal) else {
+            return Decision::Undefined;
+        };
         let key = Key {
-            principal: principal.to_ascii_lowercase(),
+            principal: user,
             node: node.to_ascii_lowercase(),
             world: world.map(str::to_owned),
         };
@@ -427,7 +466,7 @@ impl NativePermissions {
                 return cached.decision;
             }
         }
-        let mut subjects = VecDeque::from([(format!("user:{}", key.principal), 0usize)]);
+        let mut subjects = VecDeque::from([(key.principal.clone(), 0usize)]);
         let mut visited = HashSet::new();
         let mut best: Option<((usize, usize, usize), Decision)> = None;
         let mut next_expiry: Option<u64> = None;
@@ -812,6 +851,8 @@ mod tests {
             r#"{"version":1,"grants":{"group:":[{"node":"test.root","decision":"allow"}]}}"#,
             r#"{"version":1,"grants":{"alex":[{"node":"test.root","decision":"allow"}]}}"#,
             r#"{"version":1,"parents":{"user:":["group:staff"]}}"#,
+            r#"{"version":1,"grants":{"user:user:alice":[{"node":"test.use","decision":"allow"}]}}"#,
+            r#"{"version":1,"parents":{"user:alex":["group:group:staff"]}}"#,
         ];
         for json in cases {
             fs::write(&path, json).unwrap();
@@ -821,6 +862,45 @@ mod tests {
             };
             assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         }
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn typed_principal_names_agree_with_bare_names_and_reject_spoofed_groups() {
+        let (path, mut db) = db();
+        db.set("user:Alex", "test.direct", Decision::Allow, None, None)
+            .unwrap();
+        assert_eq!(db.resolve("alex", "test.direct", None, 10), Decision::Allow);
+        assert_eq!(
+            db.resolve("user:ALEx", "test.direct", None, 10),
+            Decision::Allow
+        );
+        db.set("group:Staff", "test.group", Decision::Allow, None, None)
+            .unwrap();
+        db.add_parent("user:Alex", "group:staff").unwrap();
+        assert_eq!(db.resolve("Alex", "test.group", None, 10), Decision::Allow);
+        assert_eq!(
+            db.resolve("group:staff", "test.group", None, 10),
+            Decision::Undefined
+        );
+        db.remove_parent("alex", "group:Staff").unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.group", None, 10),
+            Decision::Undefined
+        );
+        assert!(db
+            .set("user:user:alex", "test.direct", Decision::Allow, None, None)
+            .is_err());
+        assert!(db.add_parent("alex", "user:staff").is_err());
+        assert!(db.add_parent("alex", "group:group:staff").is_err());
+        assert!(db.remove_parent("alex", "user:staff").is_err());
+        drop(db);
+        let reopened = NativePermissions::open(&path).unwrap();
+        assert_eq!(
+            reopened.resolve("user:alex", "test.direct", None, 10),
+            Decision::Allow
+        );
+        drop(reopened);
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json.lock"));
     }
