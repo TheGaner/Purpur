@@ -83,3 +83,9 @@ Native permission/group and home/warp data services now load by default, with no
 Console examples: nativefeatures ; permissions set alex essentials.home allow ; permissions check alex essentials.home ; permissions parent alex staff ; sethome alex base minecraft:overworld 1 64 2 ; homes alex ; setwarp town minecraft:overworld 2 64 3 ; warp town.
 
 Homes and warps currently store and report coordinates; teleport is blocked until player/world simulation is implemented. The native modules are independently written early subsets, NOT complete official EssentialsX or LuckPerms ports. See docs/ROADMAP.md and docs/LICENSING.md for source combination gates.
+
+## Network admission and measured status performance
+
+Network acceptance is independent of the 20Hz game loop. Active handshakes are bounded by --max-connections N (default 64), and each preauth packet family is limited before payload allocation. The protocol 777 login hello is parsed, but the server still explicitly rejects all player admission: there is no authentication or playable world.
+
+Run python3 scripts/bench_status.py target/release/purpur-horizon to measure localhost server-list status requests. Sequential median RTT improved from roughly 50ms to roughly 0.12ms in the recorded test, not a TPS benchmark. See docs/NETWORK_OPTIMIZATION_2026-10-23.md for methods, p95/p99, restrictions and remaining priorities.

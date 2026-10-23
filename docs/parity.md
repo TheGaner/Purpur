@@ -21,3 +21,5 @@
 Every feature must pass deterministic reference tests before marking parity complete.
 
 For release gates and per-upstream integrations see docs/ROADMAP.md.
+
+Network milestone (2026-10-23): dedicated acceptor and state-bounded status/login parsing are implemented and locally benchmarked. 48 Rust tests passed. Login authentication, Horizon-only identity proof, configuration, play, TPS and worldgen remain unimplemented/unverified.

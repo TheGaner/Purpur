@@ -6,7 +6,10 @@ Status: 2026-10-23, protocol 777 status/ping, nonplayable login rejection, simpl
 
 ## 0 — Standalone foundation [PARTIAL]
 - [x] Independent Rust status/ping server and tested native/JVM plugin lifecycle.
-- [ ] Harden configuration, graceful shutdown, bounded connection counts, CI, reproducible packaging.
+- [x] NET-01: Decouple blocking accept from 20Hz tick, cap concurrent worker slots, precompute immutable status response.
+- [x] NET-02: Validate protocol 777 login hello/intents and bound preauth frame sizes before allocating.
+- [ ] NET-03: Deadline-aware cancellation, handshake rate and memory quotas, clean shutdown, telemetry and CI.
+- [ ] Harden configuration, graceful shutdown, CI, reproducible packaging.
 Gate: distributable release runs without Horizon engine/Java server dependencies.
 
 ## 0A — Licensing and source-combination prerequisites [ACTIVE]
@@ -48,6 +51,7 @@ Gate: independent first-party Rust native services usable with real players, per
 Gate: once play login exists, client sees permission-filtered command tree and player/console execution share one registry.
 
 ## 2 — Horizon-only play [BLOCKING]
+- [x] Pre-auth packet validation and explicit rejection at login stage (NOT an authenticated client join).
 - [ ] Minecraft 26.3 protocol 777 login/auth/encryption, configuration, secure session, play.
 - [ ] Client registry negotiation, chunk streaming, movement, inventory, teleport, keepalive.
 - [ ] Versioned Horizon client-server capability challenge; do not trust minecraft:brand alone.
@@ -104,3 +108,7 @@ This supersedes the Java-first EssentialsX proposal in the earlier research repo
 ### Native core integration verification (2026-10-23)
 
 Full local Rust suite: 36/36 passing. Release build succeeded with warnings for future player APIs. Smoke-tested compiled executable from a separate temporary directory, empty plugin folder and Java bridge off: grants and home/warp data persisted over two processes. Deliberately malformed permissions.json correctly blocked restart without clearing user data. Real logged-in player commands, teleports, database scale benchmarks, GPL-derived source combinations and deployment source-offer delivery remain unverified/pending.
+
+## 2026-10-23 network optimization checkpoint
+
+Full investigation, measured results and source constraints: docs/NETWORK_OPTIMIZATION_2026-10-23.md. On a localhost status-only workload, sequential p50 fell from 49.996ms to 0.117–0.128ms, and 8-way concurrent p95 from 50.506ms to 1.522–1.750ms after moving socket acceptance off the 20Hz simulation tick. These numbers are not gameplay/TPS claims; background builds and limited samples prevent production conclusions. 48 Rust tests pass, with no external source copied. Horizon auth/configuration and real play remain blocking milestones.

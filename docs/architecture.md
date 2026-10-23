@@ -24,3 +24,7 @@ Command layer uses the new standalone src/command.rs registry; source license is
 ## Architecture research decision, 2026-10-23
 
 The Rust command graph is deterministic and source-filtered, but intentionally remains independent of network serialization while no player login/play runtime exists. The future command path uses versioned immutable graph snapshots and permission/context revisions, with bounded tick queues. See docs/REFERENCE_ARCHITECTURE_RESEARCH_2026-10-23.md.
+
+## Network acceptance (2026-10-23)
+
+The blocking accept thread operates separately from simulation ticks, with bounded active worker permits. One immutable status response is shared across sessions. State-specific frame caps, protocol-777 login-hello validation and explicit disconnect are implemented, but no authentication, capability verification, configuration or play yet. See docs/NETWORK_OPTIMIZATION_2026-10-23.md.

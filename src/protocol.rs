@@ -30,14 +30,22 @@ pub fn varint_write(mut n: i32, out: &mut Vec<u8>) {
         n = ((n as u32) >> 7) as i32;
     }
 }
-pub fn frame_read(r: &mut impl Read) -> io::Result<Vec<u8>> {
+/// Read only frames allowed by the current protocol state. Reject malicious
+/// advertised lengths before allocating any payload. Callers must supply the
+/// narrowest state-specific limit rather than using the general MAX.
+pub fn frame_read_limited(r: &mut impl Read, limit: usize) -> io::Result<Vec<u8>> {
     let n = varint_read(r)?;
-    if n < 0 || n as usize > MAX {
+    if n < 0 || n as usize > MAX.min(limit) {
         return Err(bad("invalid frame length"));
     }
     let mut buf = vec![0; n as usize];
     r.read_exact(&mut buf)?;
     Ok(buf)
+}
+/// General-purpose bounded packet framing; not suitable for pre-auth states.
+#[allow(dead_code)]
+pub fn frame_read(r: &mut impl Read) -> io::Result<Vec<u8>> {
+    frame_read_limited(r, MAX)
 }
 pub fn frame_write(w: &mut impl Write, contents: &[u8]) -> io::Result<()> {
     if contents.len() > MAX {
@@ -127,6 +135,28 @@ mod tests {
         let mut x = vec![];
         varint_write((MAX + 1) as i32, &mut x);
         assert!(frame_read(&mut &x[..]).is_err());
+    }
+    #[test]
+    fn preauth_frame_limit_rejects_advertised_payload_without_reading() {
+        // The frame body is intentionally absent: the reader must fail on
+        // length, rather than allocate or block waiting for contents.
+        let mut advertised = vec![];
+        varint_write(1_000_000, &mut advertised);
+        assert!(frame_read_limited(&mut advertised.as_slice(), 1024).is_err());
+        let mut valid = vec![];
+        frame_write(&mut valid, &[0, 1, 2, 3]).unwrap();
+        assert_eq!(
+            frame_read_limited(&mut valid.as_slice(), 4).unwrap(),
+            vec![0, 1, 2, 3]
+        );
+        assert!(frame_read_limited(&mut valid.as_slice(), 3).is_err());
+    }
+    #[test]
+    fn malformed_length_does_not_read_payload() {
+        let mut bytes = vec![];
+        varint_write(-1, &mut bytes);
+        assert!(frame_read_limited(&mut bytes.as_slice(), 64).is_err());
+        assert!(frame_read_limited(&mut &[0x80, 0x80, 0x80, 0x80, 0x80][..], 64).is_err());
     }
     #[test]
     fn json_escape() {
