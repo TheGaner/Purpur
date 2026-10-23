@@ -82,10 +82,12 @@ def run(enforce: bool) -> int:
             blocked.append(f"{name}={status}")
 
     tracked = subprocess.run(
-        ["git", "ls-files", "--", "src", "java"],
+        ["git", "ls-files", "--", "src", "java", "scripts"],
         cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout.splitlines()
-    source_files = {x for x in tracked if x.endswith((".rs", ".java"))}
+    # Audit test/compliance Python source alongside Rust and Java runtime
+    # source; untracked caches are deliberately outside the code inventory.
+    source_files = {x for x in tracked if x.endswith((".rs", ".java", ".py"))}
     missing = sorted(source_files - covered)
     if missing:
         problems.append(f"Source files without retrospective review owner: {', '.join(missing)}")

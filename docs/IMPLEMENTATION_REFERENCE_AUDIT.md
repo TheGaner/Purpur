@@ -347,3 +347,58 @@ Fix: src/main.rs::drain_console_commands accepts a cooperative Duration budget. 
 Verification: three new Rust tests cover a slow 17ms callback preserving two queued commands, early Stop preserving later commands, and a zero-length budget allowing one message then retaining FIFO order. The existing bounded 128-command and 1,024-capacity tests remain. 74/74 Rust 1.90.0 tests and release compilation passed after implementation, and full real-server/script lifecycle checks ran. The elapsed-time rule was tested under a synthetic delayed callback; no real player/world tick, TPS, p95 MSPT, plugin isolation, preemption or total command throughput was established. This logic would need redesign with owner-affine Folia region tasks and typed player requests. No third-party code copied; first-party AGPL-3.0-or-later.
 
 RV-TICK remains IN_REVIEW. Outstanding: actual 20Hz simulation work/metrics, 5s/1m measured TPS/MSPT history, tick overrun policy parity, region ownership and cross-thread handoff validation, plugin callback isolation, integration time-load profiling, and player queue fairness. Compare those against pinned Paper/Folia/SteelMC before implementing. The Phase -1 review gate remains ACTIVE.
+
+
+## RV-LEGAL-01 pre-implementation review: locked Rust Cargo license drift gate (2026-10-23)
+
+The actual Cargo.lock contains eleven registry crates pulled in by direct serde and serde_json dependencies. Existing THIRD_PARTY_NOTICES.md names the direct dependencies and requires a transitive SBOM. Local offline Cargo metadata for pinned lock packages declares license expressions MIT OR Apache-2.0, Unlicense OR MIT, (MIT OR Apache-2.0) AND Unicode-3.0 (unicode-ident), and MIT (zmij). A blanket claim that all crates are MIT/Apache would be inaccurate. Cargo metadata reports declared SPDX expressions, not per-file copyright compliance or shipped license texts.
+
+Pinned upstream license files inspected before implementation: Purpur 5cd3596 LICENSE (MIT), Horizon e325fa6 LICENSE (MIT), LuckPerms b93a4d7 LICENSE.txt (MIT), FerrumC 51830e9 LICENSE (MIT), SteelMC dc8eaba LICENSE (AGPLv3), and EssentialsX e70bdb8 LICENSE (GPLv3). The pinned Folia 8cffa905 LICENSE path was NOT_FOUND and was not independently verified in this turn; Folia patch and inherited-file licenses require per-file review before any source reuse. The whole upstream servers' dependency inventories do not become our dependencies through research alone; no implementation code was imported.
+
+Alternatives: current-only manually edited table (staleness risk); new third-party SBOM dependencies (unnecessary runtime/build attack surface); CHOSEN a Python 3.11+ standard-library checker reconciling actual Cargo.lock, offline cargo metadata and stable reviewed JSON snapshot with crate version, locked checksum and declared license. The tool must fail closed on missing/new packages, checksum drift, license-expression changes, or missing declared licenses, but allow a deliberate explicit snapshot update after a human reviews new terms. It should avoid absolute paths and timestamps and use the pinned repository-local Rust 1.90 toolchain without changing global rustup settings. It is a supply-chain drift check, not a legal certification or complete notice-bundle generator.
+
+Acceptance: enumerate all eleven locked crates and SPDX declarations, produce deterministic checked JSON, run normal check, mutate sample license and checksum in unit tests to prove mismatch detection, update existing third-party notices and roadmap, run all 74 Rust tests plus process-level smoke. REV-LEGAL remains IN_REVIEW until actual third-party notices/license-text package, AGPL matching-source offer, imported/generated asset provenance and counsel review where appropriate. First-party scripts/documentation only and no external source code copied.
+
+
+## RV-LEGAL-01 post-implementation: exact dependency license drift verification (2026-10-23)
+
+Added scripts/check_cargo_licenses.py, a Python 3.11+ standard library
+tool invoking repository-local Rust 1.90 cargo metadata --locked --offline,
+parsing Cargo.lock with tomllib and checking all registry crate names,
+versions, origins, locked checksums and declared SPDX license expressions
+against docs/CARGO_DEPENDENCY_LICENSES.json. --accept-current writes
+a deterministic snapshot ONLY by explicit request (requires manual
+source/license review before commit). No new Rust or Python dependency.
+The source provenance table in THIRD_PARTY_NOTICES.md lists all eleven
+locked versions, including Unlicense OR MIT for memchr,
+(MIT OR Apache-2.0) AND Unicode-3.0 for unicode-ident and MIT for zmij.
+
+Three tests in scripts/test_cargo_licenses.py verify exact matching and
+mutation of license/checksum, addition/removal and snapshot schema.
+The current 11-crate snapshot matches cargo metadata and Cargo.lock.
+This is a drift monitor, not formal SPDX SBOM 2.3 schema, a supplied
+distribution-license bundle, legal certification or assurance that
+all generated assets are correctly licensed. Upstream reference license
+checks and applicable exemptions were recorded before implementation.
+The checker does not change the server runtime or its dependency graph.
+
+Still required: license notice texts with license-option choices for all
+redistributed dependencies, per-file/source copyright audit, imported
+assets, reproducible matching AGPL source release, public Corresponding
+Source offer, and independent evaluation of future GPLv3/AGPLv3 mixing.
+REV-LEGAL remains IN_REVIEW and the overall Phase -1 block remains ACTIVE.
+
+### RV-LEGAL-01 supplementary pre-code source ownership decision
+
+The review gate previously inventoried only tracked Rust and Java source in src/ and java/, omitting the four existing tracked Python benchmarking, test and audit scripts and two new license tools. This permits unchecked new or altered Python compliance/security scripts despite the project-wide review requirement. Expand the SAME nine-review gate's git-tracked source coverage to Python scripts under scripts/, and assign bench_status.py to REV-STATUS, test_plugin_lifecycle.py to REV-PLUG, test_single_writer.py to REV-STORAGE, and reference_review_gate.py plus the new license checker and its test to REV-LEGAL. This covers automation without creating additional redundant roadmap categories. Untracked pycache artifacts are excluded. Alternative leave scripts outside inventory (unjustified blind spot) or duplicate a second gate (unnecessary). Verify the expected change from eleven to seventeen covered tracked source files once new scripts are staged; review statuses remain unapproved.
+
+
+### RV-LEGAL-01 post-change source gate and scope
+
+Expanded the existing gate to include git-tracked Python source under
+scripts/ in addition to Rust and Java; six scripts are assigned to
+existing REV-STATUS, REV-PLUG, REV-STORAGE, and REV-LEGAL owners.
+No new review group was created. New scripts count after staging, and
+the gate continues to require SHA-matched source approval before
+new feature work. Unit tests for license declaration/supply-chain drift
+were added, but the broader legal review remains IN_REVIEW.

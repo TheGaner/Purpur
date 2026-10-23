@@ -32,6 +32,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [ ] RV-TICK: Audit command work budgets, tick behavior and future ownership against Folia/Paper and SteelMC.
   - [x] RV-TICK-01: Compare pinned SteelMC command queues, Paper tick schedules and official Folia independent region deadlines; reproduce slow-command tick monopolization and add a cooperative 10ms/128-command console budget with pre-dequeue cutoff, Stop/FIFO and zero-budget progress tests (74 Rust tests). Full REV-TICK IN_REVIEW.
 - [ ] RV-LEGAL: Complete per-dependency SPDX/license inventory, notices, generated assets, copied-source policy and distribution/source offer.
+  - [x] RV-LEGAL-01: Verify pinned upstream license files where available; enumerate all 11 current Cargo.lock registry crates and SPDX metadata, add deterministic offline Cargo license/checksum drift gate, three unit tests and THIRD_PARTY_NOTICES table. Full release license-text, source offer and asset obligations still open; REV-LEGAL IN_REVIEW.
 - [ ] RV-CLOSE: All retrospective rows APPROVED with current source digests, named source-code citations, reproducible verification and decision records. The review gate must pass; only then unfreeze new feature work.
 
 **Enforcement:** run python3 scripts/reference_review_gate.py --check for source-file inventory correctness, then python3 scripts/reference_review_gate.py --enforce for retrospective acceptance. Enforcement is **expected to fail until the above reviews are completed**. A clean build or 48 passing tests is not a waiver. For newly changed files, re-review and record the new source digest. Upstream references and accepted design evidence go into the existing audit—not a second roadmap.
@@ -197,3 +198,16 @@ RV-UTIL-01 completed targeted retrospective correctness hardening. Previously va
 ## 2026-10-23 tick console fairness checkpoint
 
 RV-TICK-01 performed source-backed review and corrected the console work-count-only bound. A synthetic 17ms callback previously allowed subsequent queued messages to execute in the same tick; after the fix a cooperative 10ms console work deadline preserves the backlog without dequeuing unprocessed commands. The 128 request/tick cap remains, and one pending command can always progress. 74 Rust tests and a release build passed. This does NOT preempt a slow plugin callback, guarantee actual 20 TPS, or implement Folia region scheduling; see docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Mandatory retrospective gate remains active.
+
+
+## 2026-10-23 locked Cargo dependency provenance checkpoint
+
+RV-LEGAL-01 added a reproducible license-declaration/checksum review gate
+covering all 11 locked registry crates using standard Python and the pinned
+offline Rust 1.90 Cargo metadata. Third-party notice table and reviewed
+JSON snapshot are committed for reproducibility; three independent drift
+tests pass. This catches metadata changes but is NOT complete legal
+clearance or a formal redistribution SBOM. Per-file license texts, generated
+assets, source distribution and network-source offer remain blockers.
+The Phase -1 retrospective approval gate remains active. Evidence in
+docs/IMPLEMENTATION_REFERENCE_AUDIT.md and docs/LICENSING.md.

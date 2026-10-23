@@ -226,3 +226,15 @@ instead of silently dropping them, including after an expensive action.
 At least one pending command may make progress each tick; a single blocking
 native/plugin callback can still take longer than 10ms. This is not strict
 real-time isolation or complete Folia/Paper scheduler behavior.
+
+
+### Dependency provenance check
+
+Rust dependencies are pinned by Cargo.lock. Run
+python3 scripts/check_cargo_licenses.py (using the repository-local Rust
+1.90 toolchain) to verify all registry crates against the reviewed
+docs/CARGO_DEPENDENCY_LICENSES.json license declaration snapshot. The
+checker reports any new/changed license or checksum for manual review.
+This does **not** certify per-file license compliance or generate full
+redistributable third-party license text bundles. The release-level
+copyright/notice and AGPL matching-source checklist remains open.

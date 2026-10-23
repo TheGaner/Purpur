@@ -45,3 +45,32 @@ https://github.com/EssentialsX/Essentials/blob/2.x/LICENSE ;
 https://github.com/LuckPerms/LuckPerms/blob/master/LICENSE.txt .
 
 No directly copied implementation files are included from EssentialsX, LuckPerms or SteelMC at this stage, therefore the GPL combination procedure is a future import gate rather than an assertion a covered-source merge has already occurred. This is an engineering compliance checklist, not legal advice.
+
+
+## Locked Cargo provenance verification — RV-LEGAL-01 (2026-10-23)
+
+The Rust Cargo.lock currently resolves 11 crates.io dependencies. All 11
+have declared license expressions in their resolved package metadata.
+scripts/check_cargo_licenses.py uses the standard-library TOML parser and
+the locked, offline Rust 1.90 cargo metadata to compare the current dependency
+graph with docs/CARGO_DEPENDENCY_LICENSES.json. It fails on additions/removals,
+version/checksum/metadata changes, or missing license declarations.
+A snapshot update must be explicitly reviewed and accepted; the checker
+does not auto-approve or download additional dependencies.
+
+Unlike a broad MIT/Apache assertion, the current pinned manifests also
+declare Unlicense OR MIT for memchr, the conjunctive
+(MIT OR Apache-2.0) AND Unicode-3.0 for unicode-ident, and MIT for zmij.
+See THIRD_PARTY_NOTICES.md for all pinned names and versions.
+
+The upstream pinned-source license verification corroborates Purpur, Horizon,
+LuckPerms, FerrumC (MIT), SteelMC (AGPLv3 text) and EssentialsX (GPLv3
+text). Exact Folia inherited patch/file licensing still needs inspection
+before reuse; a presumed root LICENSE path did not resolve at the pinned
+revision. These upstream dependencies do not become ours unless code/assets
+are actually reused.
+
+Engineering gate only: all real license files/copyright notices, generated
+code/assets, license-choice obligations, matching distribution sources and
+AGPL network-source offer are still release blockers. Counsel review remains
+appropriate for proposed GPL/AGPL direct source combinations.

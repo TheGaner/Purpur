@@ -29,7 +29,8 @@
       "id": "REV-STATUS",
       "status": "in_review",
       "paths": [
-        "src/main.rs"
+        "src/main.rs",
+        "scripts/bench_status.py"
       ],
       "references": [
         "Horizon",
@@ -40,7 +41,8 @@
       "test_evidence_partial": "65 Rust tests; status-only worker 3.035s baseline vs ~1.02s one-second grace; immediate and 180ms delayed Pong, real process smoke",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-02 source comparisons and post-code tradeoffs",
       "current_sha256": {
-        "src/main.rs": "7247c2c47f027dfa7b4395b6498ba8c84e80434483d7fd2b9696af829f8e5217"
+        "src/main.rs": "7247c2c47f027dfa7b4395b6498ba8c84e80434483d7fd2b9696af829f8e5217",
+        "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5"
       }
     },
     {
@@ -110,7 +112,8 @@
       "status": "in_review",
       "paths": [
         "src/builtin/permissions.rs",
-        "src/builtin/utilities.rs"
+        "src/builtin/utilities.rs",
+        "scripts/test_single_writer.py"
       ],
       "references": [
         "LuckPerms",
@@ -122,7 +125,8 @@
       "approved_sha256": {},
       "current_sha256": {
         "src/builtin/permissions.rs": "ac4ffede3639bb61a984a238a1e384a86050dd45d598ad34dd045fca0dfe875c",
-        "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658"
+        "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658",
+        "scripts/test_single_writer.py": "0f1dd52e68dcdc1c2a3c203e9210848ff881769050ea1ba458e08a79d6dd7c05"
       },
       "test_evidence_partial": "57 Rust tests; real 2-process lock, clean/SIGKILL restart and Java lifecycle; deterministic post-rename directory sync failure tests; real power-loss pending",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md REV-STORAGE-02 pre/post code comparisons and failure-state policy"
@@ -133,7 +137,8 @@
       "paths": [
         "src/native.rs",
         "src/plugins.rs",
-        "java/HorizonJavaBridge.java"
+        "java/HorizonJavaBridge.java",
+        "scripts/test_plugin_lifecycle.py"
       ],
       "references": [
         "Horizon",
@@ -147,7 +152,8 @@
       "current_sha256": {
         "src/native.rs": "a112f4bcf4cc75b37ff4e76bbaca2fbf6a664e440533112a33539a4774dbaa99",
         "src/plugins.rs": "e653468387244e249d44e8cf95f67cd94149e961d5c0a438c4e9fb99551df4e8",
-        "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276"
+        "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276",
+        "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b"
       },
       "test_evidence_partial": "51 Rust tests, plugin lifecycle smoke, slow-drip TCP tests; full approval criteria not yet met.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md targeted pre/post review"
@@ -173,12 +179,15 @@
     },
     {
       "id": "REV-LEGAL",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "LICENSE",
         "Cargo.toml",
         "Cargo.lock",
-        "THIRD_PARTY_NOTICES.md"
+        "THIRD_PARTY_NOTICES.md",
+        "scripts/reference_review_gate.py",
+        "scripts/check_cargo_licenses.py",
+        "scripts/test_cargo_licenses.py"
       ],
       "references": [
         "Purpur",
@@ -190,7 +199,18 @@
         "LuckPerms"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "test_evidence_partial": "11 exact locked registry crate metadata/checksums verified; three Python drift tests; Rust 74-test suite unchanged. Per-file notices and distribution audit pending.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-LEGAL-01 pinned upstream license comparison and Cargo offline manifest drift contract",
+      "current_sha256": {
+        "LICENSE": "be45e9d4f9634f68d03edca8368c5be482b87bf9c15db0089497595abb026f6e",
+        "Cargo.toml": "a493d1cff94b0d684a40911b48abb5f42565832a06272e49be46609a25422bcd",
+        "Cargo.lock": "ce2f463496122abd820a342e1f7a3b986ab3e0370b9626fde52286da20690138",
+        "THIRD_PARTY_NOTICES.md": "d48d721a177384970bbc4d975aa529bf9dd69d43293263e8aebf94696568e606",
+        "scripts/reference_review_gate.py": "d1cd1da975b99597f6d599dc947cdcb56de023733eba3539efe1f90bbda0d0f6",
+        "scripts/check_cargo_licenses.py": "d2ad05f3aa2dc810e608c77c0a09a8b7a97cf82dc45507b511c630f063718ca0",
+        "scripts/test_cargo_licenses.py": "db5aa5b3fc04a13d81adafb69f6c522e6325318d3de043e151c10409a30b16e7"
+      }
     }
   ]
 }
