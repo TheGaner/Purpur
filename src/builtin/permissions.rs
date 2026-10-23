@@ -119,6 +119,15 @@ fn valid_id(s: &str) -> bool {
         && s.bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"_:.-".contains(&b))
 }
+fn valid_subject_key(subject: &str) -> bool {
+    subject
+        .strip_prefix("user:")
+        .or_else(|| subject.strip_prefix("group:"))
+        .is_some_and(valid_id)
+}
+fn valid_group_link(subject: &str) -> bool {
+    subject.strip_prefix("group:").is_some_and(valid_id)
+}
 fn valid_node(s: &str) -> bool {
     (s == "*" || valid_id(s) || (s.ends_with(".*") && valid_id(&s[..s.len() - 2])))
         && s.len() <= 128
@@ -287,7 +296,7 @@ impl NativePermissions {
             ));
         }
         for (principal, entries) in &data.grants {
-            if !valid_id(principal)
+            if !valid_subject_key(principal)
                 || entries.len() > 2048
                 || entries.iter().any(|r| {
                     !valid_node(&r.node)
@@ -302,9 +311,9 @@ impl NativePermissions {
             }
         }
         for (principal, groups) in &data.parents {
-            if !valid_id(principal)
+            if !valid_subject_key(principal)
                 || groups.len() > MAX_SUBJECTS
-                || groups.iter().any(|g| !valid_id(g))
+                || groups.iter().any(|g| !valid_group_link(g))
             {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -423,8 +432,13 @@ impl NativePermissions {
         let mut best: Option<((usize, usize, usize), Decision)> = None;
         let mut next_expiry: Option<u64> = None;
         while let Some((subject, depth)) = subjects.pop_front() {
-            if !visited.insert(subject.clone()) || visited.len() > MAX_SUBJECTS {
+            if !visited.insert(subject.clone()) {
                 continue;
+            }
+            // A permission answer from only part of the reachable group
+            // graph is not authoritative. A bounded evaluator must deny.
+            if visited.len() > MAX_SUBJECTS {
+                return Decision::Undefined;
             }
             if let Some(grants) = self.data.grants.get(&subject) {
                 for rule in grants {
@@ -750,6 +764,63 @@ mod tests {
         let error = NativePermissions::open(&path).err().unwrap();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(error.to_string().contains("ambiguous"));
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn saturated_group_graph_fails_closed_and_recovers_after_parent_removed() {
+        let (path, mut db) = db();
+        db.set("alex", "test.privileged", Decision::Allow, None, None)
+            .unwrap();
+        // 127 groups + user root = 128 visited subjects, exactly at the cap.
+        let mut snapshot = db.data.clone();
+        snapshot.parents.insert(
+            "user:alex".into(),
+            (0..127).map(|i| format!("group:g{i:03}")).collect(),
+        );
+        db.commit(snapshot).unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.privileged", None, 10),
+            Decision::Allow
+        );
+        // The 128th direct parent is schema-valid, but the reachable graph
+        // has 129 distinct subjects. Never grant based on a partial traversal.
+        db.add_parent("alex", "g127").unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.privileged", None, 10),
+            Decision::Undefined
+        );
+        assert_eq!(
+            db.resolve("alex", "test.privileged", None, 11),
+            Decision::Undefined
+        );
+        db.remove_parent("alex", "g127").unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.privileged", None, 10),
+            Decision::Allow
+        );
+        drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn malformed_parent_namespace_and_subject_keys_fail_closed() {
+        let (path, original) = db();
+        drop(original);
+        let cases = [
+            r#"{"version":1,"grants":{"user:admin":[{"node":"test.root","decision":"allow"}]},"parents":{"user:alex":["user:admin"]}}"#,
+            r#"{"version":1,"grants":{"group:":[{"node":"test.root","decision":"allow"}]}}"#,
+            r#"{"version":1,"grants":{"alex":[{"node":"test.root","decision":"allow"}]}}"#,
+            r#"{"version":1,"parents":{"user:":["group:staff"]}}"#,
+        ];
+        for json in cases {
+            fs::write(&path, json).unwrap();
+            let error = match NativePermissions::open(&path) {
+                Ok(_) => panic!("invalid subject/parent accepted: {json}"),
+                Err(error) => error,
+            };
+            assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        }
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json.lock"));
     }

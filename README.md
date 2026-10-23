@@ -153,3 +153,16 @@ combining potentially conflicting security grants. Administrators must resolve
 those duplicate records manually. This is a pre-playable console convenience,
 not an authenticated player identity system: future player permissions must be
 keyed by validated UUIDs, not client-supplied names or UUIDs.
+
+
+### Native permission ancestry safety
+
+The current permission evaluator has a defensive maximum of 128 distinct
+subjects in a single user/group ancestry walk. If the limit is exceeded it
+returns Undefined (denied), never an Allow calculated from an incomplete
+graph. Persisted v1 JSON may contain only nonempty user: or group: subject
+keys, and parent links must target a nonempty group: identity. Malformed
+inheritance and identity namespaces fail startup instead of being followed.
+These are safety boundaries, not LuckPerms-compatible context, weight or
+default-group semantics. Large legitimate inheritance graphs may be denied
+until the cap is redesigned and tested against a reference oracle.

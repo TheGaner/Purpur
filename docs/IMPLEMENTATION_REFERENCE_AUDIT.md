@@ -201,3 +201,37 @@ Relevant upstream comparison after code: LuckPerms PermissionCalculatorBase.java
 Verification: three new Rust tests check mixed-case direct Deny/inherited Allow/group removal, file contents normalized, historic mixed-case grants and group parents preserved over a new commit, and conflicting legacy subject aliases rejected on open; all 60 Rust tests passed. The independent release binary also passed scripts/test_single_writer.py with uppercase ALICE grant and lowercase alice lookup across clean and SIGKILL restarts; native/Java lifecycle regression passed. No third-party source copied; no timing or throughput improvement claimed. Fail-closed ambiguous rename behavior from RV-STORAGE-02 remains tested.
 
 Remaining REV-PERM blockers: enforce authenticated UUID principals before real player admission, model LuckPerms QueryOptions and ordered processor semantics, default groups/weights/tracks/metastacking, precise user/group precedence, expiring inheritance, online/offline migrations and measured caching. REV-PERM is IN_REVIEW, not approved. REV-STORAGE remains IN_REVIEW because data format was preserved but complete crash/scale/oracle validation is pending.
+
+
+## RV-PERM-02 — group traversal saturation: pre-implementation review (2026-10-23)
+
+Scope and defect: src/builtin/permissions.rs::resolve breadth-first walks subject/group ancestry and caps unique visited nodes at MAX_SUBJECTS=128. Current condition skips a newly visited 129th subject but may return an Allow accumulated from an incomplete graph. A valid v1 JSON file can contain 128 direct group parents and a user root, exceeding the traversal bound without violating the stored schema.
+
+Source comparison, inspected before change:
+- LuckPerms b93a4d7 common/src/main/java/me/lucko/luckperms/common/graph/TraversalAlgorithm.java implements BFS/DFS graph traversal with a deduplicating visited set; PermissionCalculatorBase.java has a tri-state ordered processor chain, NOT the same as our fixed specificity rank. The artificial 128-visit limit is not claimed as LuckPerms behavior.
+- SteelMC dc8eaba steel-core/src/permission/groups.rs::from_config validates group inheritance upfront and effective_permissions deduplicates inherited groups using a BTreeSet. SteelMC also has default groups and priorities absent here; its manager.rs publishes validated snapshots.
+- Paper/Purpur live permission contracts and Folia entity ownership apply to later authenticated-player work, not this local Rust 128-entry traversal contract. EssentialsX delegates to Bukkit/Paper permissions, and FerrumC transport/storage, Horizon client and specialized networking references are not applicable.
+
+Alternatives: (A) keep partial Allow on overflow (unsafe); (B) increase cap (same latent partial bug); (C) validate all possible ancestry closure on each write (more costly and migration work); (D) CHOSEN: retain the bounded traversal and return Undefined (deny) on any newly visited subject that exceeds the limit. In-range behavior and existing cache remain unchanged. Later evaluate graph validation/cap with benchmarks and a semantic oracle. All changes first-party AGPL Rust without upstream code copied.
+
+Test acceptance: first reproduce overflow Allow using 128 schema-valid direct parents, validate Allow with 127 direct parents, Undefined when adding the 128th (129 distinct including root), and recover Allow after its removal with cache invalidation; full Rust suite, release and real-process smoke. No invented LuckPerms parity or throughput claims.
+
+
+## RV-PERM-02 additional boundary: persisted inheritance namespace (pre-implementation)
+
+Existing v1 schema permits parent link strings passing only valid_id, including user:admin. The legitimate add_parent method writes group:NAME targets, and inherited group traversal reads all targets without checking namespace. A manually modified but otherwise syntactically valid JSON snapshot can therefore make one user inherit another user's rule set, which is outside the declared group-only semantics. Likewise a bare or empty user:/group: subject key is currently valid_id but is never intentionally emitted by normal writes.
+
+Pinned source reuse: LuckPerms b93a4d7 graph TraversalAlgorithm operates on already-typed graph nodes; SteelMC dc8eaba groups.rs validates named groups and inheritance before publication, including missing groups/cycles. The Rust prototype does not need to implement complete group existence or priority today, but must avoid crossing its explicit user/group namespace boundary. Paper/Purpur and Folia live-player semantics remain future tasks; unrelated storage/network references are inapplicable.
+
+Alternatives: ignore malformed persisted edges (could conceal misconfiguration and existing grants), follow arbitrary user:* edges (authorization escalation), migrate arbitrary bare keys to users (could merge identities), or chosen **reject invalid v1 subject keys and non-group inheritance edges during load and write validation**. Preserve valid historical mixed-case names, including case-normalization repair. No new schema or imported third-party code. Acceptance: reproduce unsafe cross-user inheritance before patch, reject it on open, reject empty/bare namespace keys, preserve legitimate group inheritance/restart, all regression/integration tests. Never claim complete LuckPerms parity.
+
+
+## RV-PERM-02 post-implementation verification — saturation and identity boundaries (2026-10-23)
+
+Baseline: 60 Rust tests on clean cc802446cb677f3db7e0bc1d1f2656e8434e4d16. A new test failed against the old code, observing Allow where a 129-subject group traversal (valid 128 direct links plus user root) should have returned Undefined. A separate new test failed against the old code because a manually edited JSON v1 snapshot allowed a parent edge from user:alex to user:admin and accepted missing/empty subject namespaces.
+
+Implementation: src/builtin/permissions.rs now returns Undefined immediately when visiting a 129th distinct reachable subject rather than preserving a partial positive decision. The existing 128-subject cap, BFS semantics and v1 schema are unchanged. Stored grant/parent keys must have a nonempty user: or group: namespace, and inheritance edges must use a nonempty group: target. Invalid persisted values are rejected as InvalidData at open. Original first-party AGPL-3.0-or-later Rust; no source transplanted from LuckPerms or SteelMC.
+
+Verification: two distinct regressions fail on previous code, then succeed after remediation. The boundary test verifies Allow with exactly 128 reachable subjects, Undefined at 129 even with a preexisting direct Allow, and Allow after removing the excess group with cache invalidation. The schema test verifies fail-closed rejection for user-to-user inheritance and empty/bare subject names. Full Rust 1.90 unit suite: 62/62 passed; release build passed. Neither a LuckPerms semantic oracle nor performance benchmark was executed. In particular LuckPerms's configurable BFS/DFS graph traversal and ordered permission processors, and SteelMC's startup validation/priority model, are more complete. This fix enforces local authorization safety under the current capped implementation; it does not establish equivalence to either server.
+
+Remaining: benchmark a validated graph/precomputed closure strategy, differential processor/context/expiry/group priority rules, authenticated UUID identity and safe future schema migrations. REV-PERM still IN_REVIEW; retrospective advancement gate remains enforced.
