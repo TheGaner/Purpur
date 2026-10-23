@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+mod command;
 mod native;
 mod plugins;
 mod protocol;
@@ -39,6 +41,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("WARNING: gameplay login and Purpur parity NOT implemented");
     let mut plugins = plugins::Plugins::load(&plugins_dir);
     println!("{}", plugins.info());
+    let mut commands = command::Registry::builtins();
+    plugins.register_commands(&mut commands);
+    let permissions = command::Grants::default();
+    let started = Instant::now();
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let mut s = String::new();
@@ -68,12 +74,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => eprintln!("accept: {e}"),
         }
         while let Ok(cmd) = rx.try_recv() {
-            match cmd.as_str() {
-                "stop" | "quit" => return Ok(()),
-                "version" => println!("Purpur-Horizon 0.1.0 (proto)"),
-                "plugins" => println!("{}", plugins.info()),
-                "help" => println!("stop, version, plugins, help"),
-                other => plugins.event(3, tick, other),
+            let plugins_info = plugins.info();
+            let snapshot = command::Snapshot {
+                version: "Purpur-Horizon 0.1.0 (command prototype)",
+                plugins: &plugins_info,
+                tick,
+                uptime: started.elapsed(),
+            };
+            match commands.execute(&cmd, &command::Source::Console, &permissions, &snapshot) {
+                Ok(reply) => {
+                    for line in reply.lines {
+                        println!("{line}");
+                    }
+                    match reply.effect {
+                        command::Effect::None => {}
+                        command::Effect::Stop => return Ok(()),
+                        command::Effect::Plugin {
+                            owner,
+                            command,
+                            args,
+                        } => {
+                            plugins.execute_command(&owner, &command, &args, tick);
+                        }
+                    }
+                }
+                Err(command::Error::Empty) => {}
+                Err(error) => eprintln!("[command] {error}"),
             }
         }
         plugins.event(2, tick, "");

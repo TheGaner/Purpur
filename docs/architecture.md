@@ -18,3 +18,5 @@
 5. Versioned server Rust WASM SDK plus event and command dispatcher, safe host capabilities.
 6. JVM bridge API, plugin.yml and paper-plugin.yml dependency graphs, event/command dispatch, Bukkit/Paper compatibility tests.
 7. Horizon client opt-in authentication/identity handshake; strict reject non-Horizon client.
+
+Command layer uses the new standalone src/command.rs registry; source license is AGPL-3.0-or-later. See docs/ROADMAP.md, docs/LICENSING.md and THIRD_PARTY_NOTICES.md.

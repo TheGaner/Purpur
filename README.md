@@ -42,3 +42,27 @@ source tree, the Horizon engine, or the Purpur Java server. The Java bridge
 source is embedded in the Rust binary and extracted only when Java jars are
 present. A system Java 21+ runtime is still required for Java plugins.
 This does not change the existing Java API compatibility limitation.
+
+## Command layer (early implementation)
+
+Native Rust command registry now supports quoted and escaped token parsing,
+aliases, plugin namespaces, collisions, positional word/integer/greedy arguments,
+metadata-based registration, and permission-scoped discovery, execution and
+suggestions. The console dispatches commands through this registry instead of
+a hardcoded command switch. Current built-ins are help, stop, version, plugins,
+uptime, tps (target only) and echo. Try: help, help echo, echo "hello world",
+hi (from the compiled example plugin), and stop.
+
+The optional trusted Rust ABI export horizon_plugin_commands returns a static
+UTF-8 C string with lines in this shape:
+
+    hello|example.hello|hi
+
+A line declares command name, permission node, comma-delimited aliases.
+Plugin execution uses the existing event callback (event 3). No world/player
+commands or runtime Java plugin command registration are implemented yet.
+Player permissions are fail-closed and an in-memory contextual/group permission
+provider is scaffolded; no players may connect yet and persistence/LuckPerms
+integration are planned.
+
+See docs/ROADMAP.md, docs/LICENSING.md and THIRD_PARTY_NOTICES.md.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Trust boundary: Rust native plugins have complete process privileges.
 // Linux proof-of-concept C ABI. Versioning prevents arbitrary entrypoint ABI drift.
 #[cfg(unix)]
@@ -62,6 +63,27 @@ impl Plugin {
                     Err(e)
                 }
             }
+        }
+    }
+    pub fn declared_commands(&self) -> Option<String> {
+        // Optional ABI extension: exported static UTF-8 C string, newline-
+        // separated name|permission|alias1,alias2 definitions.
+        // Native plugins are trusted; they can crash the host regardless.
+        unsafe {
+            let symbol = dlsym(self.handle, c"horizon_plugin_commands".as_ptr());
+            if symbol.is_null() {
+                return None;
+            }
+            let func: unsafe extern "C" fn() -> *const c_char = std::mem::transmute(symbol);
+            let ptr = func();
+            if ptr.is_null() {
+                return None;
+            }
+            let bytes = CStr::from_ptr(ptr).to_bytes();
+            if bytes.len() > 8192 {
+                return None;
+            }
+            String::from_utf8(bytes.to_vec()).ok()
         }
     }
     pub fn event(&self, code: u32, tick: u64, payload: &str) {

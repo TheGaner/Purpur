@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::{ffi::CStr,os::raw::c_char};
 #[no_mangle]pub extern "C" fn horizon_plugin_abi_version()->u32{1}
@@ -9,4 +10,9 @@ use std::{ffi::CStr,os::raw::c_char};
   4=>println!("[hello-horizon] disabled"),
   _=>()
  }0
+}
+
+#[no_mangle]
+pub extern "C" fn horizon_plugin_commands() -> *const c_char {
+    c"hello|example.hello|hi".as_ptr()
 }

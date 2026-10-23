@@ -1,4 +1,5 @@
-use crate::native;
+// SPDX-License-Identifier: AGPL-3.0-or-later
+use crate::{command, native};
 use std::{
     fs,
     io::Write,
@@ -75,6 +76,55 @@ impl Plugins {
         };
         p.event(1, 0, "");
         p
+    }
+    pub fn register_commands(&self, registry: &mut command::Registry) {
+        #[cfg(unix)]
+        for plugin in &self.rust {
+            if let Some(manifest) = plugin.declared_commands() {
+                for line in manifest.lines().take(64) {
+                    let parts: Vec<_> = line.split('|').collect();
+                    if parts.len() != 3 {
+                        eprintln!("[rust] invalid command declaration in {}", plugin.name);
+                        continue;
+                    }
+                    let aliases = if parts[2].is_empty() {
+                        vec![]
+                    } else {
+                        parts[2].split(',').map(str::to_owned).collect()
+                    };
+                    let spec = command::Command {
+                        name: parts[0].to_owned(),
+                        aliases,
+                        permission: parts[1].to_owned(),
+                        description: format!("Plugin command from {}", plugin.name),
+                        parameters: vec![],
+                        handler: command::Handler::Plugin {
+                            owner: plugin.name.clone(),
+                        },
+                    };
+                    if let Err(error) = registry.register(spec) {
+                        eprintln!("[rust] {}: {error}", plugin.name);
+                    }
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = registry;
+    }
+    pub fn execute_command(&mut self, owner: &str, command: &str, args: &str, tick: u64) {
+        #[cfg(unix)]
+        {
+            if let Some(plugin) = self.rust.iter().find(|p| p.name == owner) {
+                let text = if args.is_empty() {
+                    command.to_string()
+                } else {
+                    format!("{command} {args}")
+                };
+                plugin.event(3, tick, &text);
+                return;
+            }
+        }
+        eprintln!("[command] no loaded plugin owns {owner}:{command}");
     }
     pub fn event(&mut self, code: u32, tick: u64, payload: &str) {
         #[cfg(unix)]
