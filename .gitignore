@@ -1,0 +1,10 @@
+/target
+/.rustup
+/plugins
+/java-bridge
+*.class
+*.jar
+*.so
+
+/examples/rust-plugin/target/
+/examples/rust-plugin/Cargo.lock
