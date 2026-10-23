@@ -45,7 +45,7 @@
     },
     {
       "id": "REV-CMD",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/command.rs",
         "src/command/tree.rs"
@@ -57,7 +57,13 @@
         "LuckPerms"
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
-      "approved_sha256": {}
+      "approved_sha256": {},
+      "current_sha256": {
+        "src/command.rs": "d4c755cc2623753666b18d76f270c92b2695d512817244d0995491eba36f9744",
+        "src/command/tree.rs": "5d5bf67508281b1960c617b16f48fae88c2df4a81c29bfb4383276f9c440f551"
+      },
+      "test_evidence_partial": "69 Rust tests; 3 failing-before command identity/graph overflow/inverted integer descriptors, plus nested cycle boundary; release build and integration smokes; no client oracle",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-CMD-01 SteelMC/LuckPerms pre/post source comparison"
     },
     {
       "id": "REV-PERM",

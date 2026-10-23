@@ -17,6 +17,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [ ] RV-STATUS: Verify status/ping response framing, version behavior, limits and dynamic future semantics against Horizon and Paper/Purpur.
   - [x] RV-STATUS-01 / RV-NET-02: Compare Horizon's separate status and Ping packets and FerrumC timeout strategy; bound optional Ping wait to one second after status. Reproduced idle-worker hold 3.035s before and ~1.02s after; delayed Pong and all Rust regressions pass. Wider reviews IN_REVIEW.
 - [ ] RV-CMD: Differentially audit command tree, argument parsing, suggestions and permissions against Paper/Purpur Brigadier, SteelMC, FerrumC and LuckPerms.
+  - [x] RV-CMD-01: Compare pinned SteelMC Brigadier normalization and visible command tree plus LuckPerms permission processors; reproduce and repair inconsistent mixed-case command identity, partial-allow from truncated legacy group walk and accepted inverted integer range. 4 new Rust regressions (69 total), release and integration checks. Broader REV-CMD remains IN_REVIEW.
 - [ ] RV-PERM: Compare native Rust permissions to LuckPerms calculator, graph, contexts, cache and persistence, plus relevant SteelMC/Paper semantics.
   - [x] RV-PERM-01: Compare pinned LuckPerms calculator, cache, storage and SteelMC group snapshots; fix mixed-case legacy subject/group access and migrate unambiguous v1 names in memory while refusing colliding identities. Three tests, 60 total passed. Broader REV-PERM remains IN_REVIEW.
   - [x] RV-PERM-02: Reproduce partial Allow on group ancestry saturation and cross-user inherited grants through malformed JSON; return Undefined on over-limit traversal and reject invalid subject/parent namespaces on open. 62 Rust tests passed; full REV-PERM still IN_REVIEW.
@@ -179,3 +180,8 @@ RV-PERM-03 fixed previously confirmed typed principal inconsistencies. The old e
 ## 2026-10-23 status-only worker occupancy checkpoint
 
 RV-NET-02 / RV-STATUS-01: status-only TCP clients previously held a network worker for the entire 3-second preauth admission deadline after status was already sent. A before-fix regression measured 3.035s; a status-specific one-second Ping grace now releases a status-only worker after about 1.02s on localhost and preserves 180ms delayed Ping/Pong. This is not proof of higher production throughput, internet compatibility at extreme RTT or gameplay TPS. Horizon protocol and FerrumC connection references, rationale and remaining tradeoffs are in docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Phase -1 source review is still active.
+
+
+## 2026-10-23 scoped command registry correctness checkpoint
+
+RV-CMD-01 advanced the Phase -1 command audit without unfreezing new gameplay. Three failing-before issues were corrected: registered commands now consistently use canonical lowercase identity for their routes and effects; the legacy in-memory Grants helper never returns Allow from an unvisited suffix of the group graph (bounded 64 subjects, including default); impossible registered integer min/max descriptors reject before mutation. A nested fanout/cycle boundary test was added. 69 Rust unit tests passed and release compilation succeeded. The implementation is still NOT an actual protocol-777 Commands packet or complete Brigadier/LuckPerms semantics; see docs/IMPLEMENTATION_REFERENCE_AUDIT.md. Review hold ACTIVE.

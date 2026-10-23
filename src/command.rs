@@ -149,12 +149,17 @@ impl Permissions for Grants {
         let mut visited = HashSet::new();
         visited.insert(principal.to_owned());
         let mut cursor = 0;
-        while cursor < subjects.len() && subjects.len() < 64 {
+        while cursor < subjects.len() {
             let current = subjects[cursor].clone();
             if let Some(groups) = self.groups.get(&current) {
                 for group in groups {
                     let group_key = format!("group:{group}");
                     if visited.insert(group_key.clone()) {
+                        if subjects.len() >= 64 {
+                            // This helper cannot authorize from only the
+                            // portion of a graph which fit into its budget.
+                            return false;
+                        }
                         subjects.push(group_key);
                     }
                 }
@@ -162,6 +167,9 @@ impl Permissions for Grants {
             cursor += 1;
         }
         if visited.insert("group:default".to_string()) {
+            if subjects.len() >= 64 {
+                return false;
+            }
             subjects.push("group:default".to_string());
         }
         let mut best: Option<(usize, bool)> = None;
@@ -352,7 +360,7 @@ impl Registry {
         }
         reg
     }
-    pub fn register(&mut self, spec: Command) -> Result<(), Error> {
+    pub fn register(&mut self, mut spec: Command) -> Result<(), Error> {
         // Bounded registry and command tree size; plugin manifests must not
         // allocate an unbounded node graph on player join.
         if self.commands.len() >= 1024 || spec.aliases.len() > 32 || spec.parameters.len() > 64 {
@@ -398,6 +406,19 @@ impl Registry {
         {
             return Err(Error::InvalidSyntax("greedy parameter must be last".into()));
         }
+        if spec
+            .parameters
+            .iter()
+            .any(|p| matches!(p.kind, Argument::Integer { min, max } if min > max))
+        {
+            return Err(Error::InvalidSyntax(
+                "integer argument minimum exceeds maximum".into(),
+            ));
+        }
+        // The route, metadata, visible tree, and resulting dispatch effect
+        // must use one canonical identity, even for mixed-case registrations.
+        spec.name = name.clone();
+        spec.aliases = all.iter().skip(1).cloned().collect();
         for label in all {
             self.routes.insert(label, name.clone());
         }
@@ -892,6 +913,97 @@ mod tests {
         assert!(r
             .project(&Source::Console, &Grants::default())
             .labels()
+            .is_empty());
+    }
+    #[test]
+    fn mixed_case_registration_has_one_canonical_identity_everywhere() {
+        let mut reg = Registry::default();
+        reg.register(Command {
+            name: "Demo:Run".into(),
+            aliases: vec!["RUN".into()],
+            permission: "demo.run".into(),
+            description: "demo".into(),
+            parameters: vec![],
+            handler: Handler::Core,
+        })
+        .unwrap();
+        let reply = reg
+            .execute("RuN", &Source::Console, &Grants::default(), &state())
+            .unwrap();
+        assert_eq!(
+            reply.effect,
+            Effect::Core {
+                command: "demo:run".into(),
+                args: String::new()
+            }
+        );
+        assert_eq!(
+            reg.visible(&Source::Console, &Grants::default()),
+            vec!["demo:run"]
+        );
+        assert_eq!(
+            reg.project(&Source::Console, &Grants::default()).labels(),
+            vec!["demo:run", "run"]
+        );
+        assert_eq!(reg.unregister_owner("doesnotexist"), 0);
+    }
+    #[test]
+    fn legacy_grants_reject_incomplete_group_inheritance() {
+        let mut grants = Grants::default();
+        grants.set("steve", "test.action", true, None);
+        for index in 0..62 {
+            grants.add_group("steve", &format!("team{index:02}"));
+        }
+        // User + 62 directly inherited groups + default = exactly 64.
+        assert!(grants.allowed("steve", "test.action", None));
+        grants.add_group("steve", "team62");
+        // Over the 64-subject graph cap, any partial Allow must be rejected.
+        assert!(!grants.allowed("steve", "test.action", None));
+    }
+    #[test]
+    fn legacy_grants_nested_graph_overflow_and_cycle_are_safe() {
+        let mut grants = Grants::default();
+        grants.set("steve", "demo.use", true, None);
+        grants.add_group("steve", "nested");
+        grants.add_group("group:nested", "nested"); // deliberate cycle
+                                                    // User + nested + 61 distinct children + default = 64.
+        for i in 0..61 {
+            grants.add_group("group:nested", &format!("branch{i:02}"));
+        }
+        assert!(grants.allowed("steve", "demo.use", None));
+        grants.add_group("group:nested", "branch61");
+        assert!(!grants.allowed("steve", "demo.use", None));
+    }
+    #[test]
+    fn invalid_integer_range_is_rejected_without_mutating_registry() {
+        let mut reg = Registry::default();
+        let original = reg.project(&Source::Console, &Grants::default());
+        let bad = Command {
+            name: "impossible".into(),
+            aliases: vec!["cantwork".into()],
+            permission: "demo".into(),
+            description: "bad range".into(),
+            parameters: vec![Parameter {
+                label: "num",
+                kind: Argument::Integer { min: 10, max: 1 },
+                optional: false,
+            }],
+            handler: Handler::Plugin {
+                owner: "demo".into(),
+            },
+        };
+        assert!(matches!(reg.register(bad), Err(Error::InvalidSyntax(_))));
+        assert_eq!(
+            reg.project(&Source::Console, &Grants::default()).nodes,
+            original.nodes
+        );
+        assert_eq!(
+            reg.project(&Source::Console, &Grants::default())
+                .registry_revision,
+            original.registry_revision
+        );
+        assert!(reg
+            .complete("imp", &Source::Console, &Grants::default())
             .is_empty());
     }
     #[test]

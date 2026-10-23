@@ -189,3 +189,15 @@ hold has a localhost regression, including a delayed Ping/Pong round trip.
 Clients taking more than one second to send Ping after receiving status
 could miss their Pong. This is a prototype admission tradeoff, not a
 production network-concurrency or Minecraft gameplay benchmark.
+
+
+### Reviewed command registration safety (RV-CMD-01)
+
+The Rust command registry canonicalizes stored command names and aliases to
+lowercase, so registrations, permission-filtered trees and dispatcher effects
+agree even when an extension registers a mixed-case name. Inverted integer
+bounds are rejected before publishing a command. The separate legacy
+in-memory Grants test helper now denies when group traversal exceeds its
+64-subject bound rather than granting from a partial graph. The production
+native permission evaluator has different data, semantics and limits. This
+does not provide full Brigadier or Minecraft protocol-777 command support.
