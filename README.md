@@ -178,3 +178,14 @@ will never reinterpret group:staff as a user with group authority; malformed
 or doubly qualified names are rejected. These inputs are administrative
 labels only, not authenticated identities for online players. Actual
 Horizon login/authenticated UUIDs and LuckPerms parity remain pending.
+
+
+### Optional status Ping timeout
+
+After serving a server-list status response, the server waits at most one
+additional second (and never past the original three-second handshake
+deadline) for an optional protocol-777 Ping packet. The reduced idle worker
+hold has a localhost regression, including a delayed Ping/Pong round trip.
+Clients taking more than one second to send Ping after receiving status
+could miss their Pong. This is a prototype admission tradeoff, not a
+production network-concurrency or Minecraft gameplay benchmark.

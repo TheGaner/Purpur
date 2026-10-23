@@ -215,9 +215,15 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
                 ));
             }
             socket.write_all(status_reply)?;
-            if let Ok(ping) =
-                frame_read_limited(&mut network::DeadlineReader::new(&mut socket, deadline), 9)
-            {
+            // The optional ping is independent of the status response. Do
+            // not occupy a scarce handshake worker for the entire 3s budget
+            // after already answering a status-only peer. Give genuine
+            // status/Ping clients a separate bounded 1s opportunity to ping.
+            let ping_deadline = deadline.min(Instant::now() + Duration::from_secs(1));
+            if let Ok(ping) = frame_read_limited(
+                &mut network::DeadlineReader::new(&mut socket, ping_deadline),
+                9,
+            ) {
                 if ping.len() == 9 && ping[0] == 1 {
                     frame_write(&mut socket, &ping)?;
                 }
@@ -330,6 +336,63 @@ mod tests {
         let mut c = protocol::Cursor::new(&reply);
         assert_eq!(c.varint().unwrap(), 0);
         assert!(c.text(256).unwrap().contains("protocol 777"));
+        job.join().unwrap();
+    }
+    #[test]
+    fn status_only_peer_releases_worker_without_three_second_ping_hold() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let start = Instant::now();
+        let job = thread::spawn(move || {
+            let (socket, _) = server.accept().unwrap();
+            serve(socket, &make_status_response("test")).unwrap();
+        });
+        let mut client = TcpStream::connect(addr).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut handshake = vec![0];
+        protocol::varint_write(777, &mut handshake);
+        protocol::write_string("localhost", &mut handshake);
+        handshake.extend([0x63, 0xdd, 1]);
+        protocol::frame_write(&mut client, &handshake).unwrap();
+        protocol::frame_write(&mut client, &[0]).unwrap();
+        let response = protocol::frame_read_limited(&mut client, 1024).unwrap();
+        let mut c = protocol::Cursor::new(&response);
+        assert_eq!(c.varint().unwrap(), 0);
+        assert!(c.text(1024).unwrap().contains("protocol"));
+        // Deliberately keep the connection open and never send Ping.
+        job.join().unwrap();
+        assert!(
+            start.elapsed() < Duration::from_millis(1700),
+            "status-only peer occupied a worker too long: {:?}",
+            start.elapsed()
+        );
+    }
+    #[test]
+    fn delayed_status_ping_within_grace_echoes_payload() {
+        let server = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let job = thread::spawn(move || {
+            let (socket, _) = server.accept().unwrap();
+            serve(socket, &make_status_response("test")).unwrap();
+        });
+        let mut client = TcpStream::connect(addr).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut hs = vec![0];
+        protocol::varint_write(777, &mut hs);
+        protocol::write_string("localhost", &mut hs);
+        hs.extend([0x63, 0xdd, 1]);
+        protocol::frame_write(&mut client, &hs).unwrap();
+        protocol::frame_write(&mut client, &[0]).unwrap();
+        let _ = protocol::frame_read_limited(&mut client, 1024).unwrap();
+        thread::sleep(Duration::from_millis(180));
+        let mut ping = vec![1];
+        ping.extend((-1234i64).to_be_bytes());
+        protocol::frame_write(&mut client, &ping).unwrap();
+        assert_eq!(protocol::frame_read_limited(&mut client, 9).unwrap(), ping);
         job.join().unwrap();
     }
     #[test]

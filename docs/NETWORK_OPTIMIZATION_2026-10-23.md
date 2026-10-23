@@ -77,3 +77,15 @@ Two post-fix localhost status-only samples: sequential p50 0.346ms/0.129ms,
 8-way concurrent p95 2.062ms/1.787ms. Scheduling jitter is significant;
 do not claim a new performance win. Total write deadlines, cancellation
 and reactor/load benchmarks remain deferred.
+
+
+### 2026-10-23 optional Ping slot-residency follow-up
+
+A protocol-777 status-only peer previously kept the TCP worker alive around
+3.035s after the handshake even though status had already been returned.
+A new one-second Ping grace (capped by the pre-existing global deadline)
+reduced the observed localhost worker occupancy to around 1.02s while the
+original immediate Ping/Pong and a new 180ms delayed Ping test still pass.
+This is a single connection timing comparison, not a controlled packet-rate
+benchmark. Extremely high latency clients may not get Pong; per-IP limits,
+reactor transport and full login/play remain outstanding.
