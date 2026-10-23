@@ -89,3 +89,17 @@ original immediate Ping/Pong and a new 180ms delayed Ping test still pass.
 This is a single connection timing comparison, not a controlled packet-rate
 benchmark. Extremely high latency clients may not get Pong; per-IP limits,
 reactor transport and full login/play remain outstanding.
+
+
+### 2026-10-23 outgoing admission write-deadline follow-up
+
+The Rust pre-authentication worker's absolute three-second deadline is now
+used by both incoming reads and all outgoing response writes. Previously
+SO_SNDTIMEO was fixed to three seconds per write, so a stalled outgoing
+write could consume time independently of the incoming budget. The
+DeadlineWriter recomputes the remaining monotonic budget before every write
+and refuses an already-expired deadline. The pre-existing 1s optional
+status/Ping grace also caps Pong writes. A real local stalled TCP receiver
+and a 16MiB attempted send hit the 250ms deadline; ordinary status and
+login framing tests still pass. This demonstrates a bounded local send,
+NOT a comprehensive malicious-load benchmark or full worker cancellation.

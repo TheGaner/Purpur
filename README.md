@@ -238,3 +238,15 @@ checker reports any new/changed license or checksum for manual review.
 This does **not** certify per-file license compliance or generate full
 redistributable third-party license text bundles. The release-level
 copyright/notice and AGPL matching-source checklist remains open.
+
+
+### Outbound admission deadline
+
+Pre-play network responses (server-list status, Ping/Pong, login rejection)
+now share the original three-second monotonic handshake admission deadline.
+The Pong also uses the shorter one-second optional Ping grace. Reads and
+writes recompute their remaining socket timeouts for partial I/O so one
+stalled send cannot restart a fresh three-second window. Real-TCP tests
+exercise expired, successful framed and blocked-receiver writes. These
+limits do not constitute authentication, a per-IP admission quota, or
+guaranteed real-time process cancellation.

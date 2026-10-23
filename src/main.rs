@@ -225,7 +225,6 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
     use protocol::*;
     // One total admission window shared by all preauth protocol states.
     let deadline = Instant::now() + Duration::from_secs(3);
-    socket.set_write_timeout(Some(Duration::from_secs(3)))?;
     // 255-char hostname (worst-case 3-byte UTF-8), packet ID, version,
     // port and next-state VarInts fit under 1024 bytes.
     let hs = frame_read_limited(
@@ -243,7 +242,7 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
                     "bad status request",
                 ));
             }
-            socket.write_all(status_reply)?;
+            network::DeadlineWriter::new(&mut socket, deadline).write_all(status_reply)?;
             // The optional ping is independent of the status response. Do
             // not occupy a scarce handshake worker for the entire 3s budget
             // after already answering a status-only peer. Give genuine
@@ -254,7 +253,10 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
                 9,
             ) {
                 if ping.len() == 9 && ping[0] == 1 {
-                    frame_write(&mut socket, &ping)?;
+                    frame_write(
+                        &mut network::DeadlineWriter::new(&mut socket, ping_deadline),
+                        &ping,
+                    )?;
                 }
             }
         }
@@ -263,7 +265,7 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
             // hello, preventing an avoidable timeout on malformed old clients.
             if intention.version != VERSION {
                 frame_write(
-                    &mut socket,
+                    &mut network::DeadlineWriter::new(&mut socket, deadline),
                     &network::login_disconnect(&format!(
                         "Requires Horizon 26.3 (protocol {VERSION})"
                     )),
@@ -281,7 +283,10 @@ fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
             } else {
                 "Horizon-Purpur Rust: authentication and gameplay not implemented yet".into()
             };
-            frame_write(&mut socket, &network::login_disconnect(&reason))?;
+            frame_write(
+                &mut network::DeadlineWriter::new(&mut socket, deadline),
+                &network::login_disconnect(&reason),
+            )?;
         }
     }
     let _ = socket.flush();

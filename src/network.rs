@@ -39,6 +39,36 @@ impl io::Read for DeadlineReader<'_> {
         io::Read::read(self.stream, out)
     }
 }
+/// Use the same absolute pre-authentication deadline for outbound writes.
+/// A fixed SO_SNDTIMEO on its own restarts for each partial write.
+pub struct DeadlineWriter<'a> {
+    stream: &'a mut TcpStream,
+    deadline: Instant,
+}
+impl<'a> DeadlineWriter<'a> {
+    pub fn new(stream: &'a mut TcpStream, deadline: Instant) -> Self {
+        Self { stream, deadline }
+    }
+}
+impl io::Write for DeadlineWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let remaining = self.deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::new(
+                ErrorKind::TimedOut,
+                "pre-authentication write deadline expired",
+            ));
+        }
+        // The OS requires a nonzero timeout. Each additional partial write
+        // rechecks the shared monotonic deadline, not a fresh three seconds.
+        self.stream
+            .set_write_timeout(Some(remaining.max(Duration::from_millis(1))))?;
+        io::Write::write(self.stream, buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        io::Write::flush(self.stream)
+    }
+}
 fn bad(detail: &'static str) -> io::Error {
     io::Error::new(ErrorKind::InvalidData, detail)
 }
@@ -214,6 +244,62 @@ mod tests {
         assert_eq!(c.varint().unwrap(), 0);
         assert_eq!(c.text(32767).unwrap(), r#"{"text":"Use Horizon \"26.3\""}"#);
         assert_eq!(c.remaining(), 0);
+    }
+    #[test]
+    fn expired_writer_refuses_writable_socket_without_sending() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut peer = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        peer.set_read_timeout(Some(Duration::from_millis(100)))
+            .unwrap();
+        let mut writer =
+            DeadlineWriter::new(&mut server, Instant::now() - Duration::from_millis(1));
+        assert_eq!(
+            writer.write_all(b"blocked").unwrap_err().kind(),
+            ErrorKind::TimedOut
+        );
+        assert!(matches!(
+            peer.read(&mut [0; 16]).unwrap_err().kind(),
+            ErrorKind::TimedOut | ErrorKind::WouldBlock
+        ));
+    }
+    #[test]
+    fn stalled_peer_cannot_extend_total_write_budget() {
+        use std::io::Write;
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        // Keep the receiver alive but never read: a 16 MiB response cannot
+        // normally fit into the loopback TCP send buffers.
+        let _peer = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        let started = Instant::now();
+        let mut writer = DeadlineWriter::new(&mut server, started + Duration::from_millis(250));
+        let error = writer.write_all(&vec![0u8; 16 * 1024 * 1024]).unwrap_err();
+        assert!(
+            matches!(error.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock),
+            "{error}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "blocked writer exceeded reasonable deadline tolerance: {:?}",
+            started.elapsed()
+        );
+    }
+    #[test]
+    fn unexpired_writer_sends_valid_framed_reply() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut peer = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (mut server, _) = listener.accept().unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+        let mut writer = DeadlineWriter::new(&mut server, Instant::now() + Duration::from_secs(1));
+        protocol::frame_write(&mut writer, &[1, 42, 77]).unwrap();
+        assert_eq!(
+            protocol::frame_read_limited(&mut peer, 3).unwrap(),
+            vec![1, 42, 77]
+        );
     }
     #[test]
     fn expired_deadline_never_reads_available_bytes() {

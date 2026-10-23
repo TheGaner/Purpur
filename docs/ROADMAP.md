@@ -14,6 +14,7 @@ Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON nativ
 - [x] RV-01: Establish mandatory pre-/post-implementation reference-review procedure, comparison scope, licensing/benchmark policy, retrospective review ledger, and staleness checks. See [review and reference audit](IMPLEMENTATION_REFERENCE_AUDIT.md).
 - [ ] RV-NET: Verify prior protocol/network choices against Horizon 26.3, SteelMC, FerrumC, Paper/Purpur, and applicable networking implementations; review deadlines, auth, memory, concurrency, p95/p99, fairness.
   - [x] RV-NET-01: Cross-reference FerrumC whole-handshake timeout and Horizon connection semantics; replace per-read timeout loophole with absolute preauth deadline and slow-drip regression; wider REV-NET still IN_REVIEW.
+  - [x] RV-NET-03: Compare FerrumC whole-handshake timeout and Horizon stream writers; extend absolute three-second admission deadline to all outbound status/login rejection writes, with existing one-second optional Pong grace. Three new real-TCP writer tests including blocked-receiver pressure; 77 Rust tests. Wider REV-NET IN_REVIEW.
 - [ ] RV-STATUS: Verify status/ping response framing, version behavior, limits and dynamic future semantics against Horizon and Paper/Purpur.
   - [x] RV-STATUS-01 / RV-NET-02: Compare Horizon's separate status and Ping packets and FerrumC timeout strategy; bound optional Ping wait to one second after status. Reproduced idle-worker hold 3.035s before and ~1.02s after; delayed Pong and all Rust regressions pass. Wider reviews IN_REVIEW.
 - [ ] RV-CMD: Differentially audit command tree, argument parsing, suggestions and permissions against Paper/Purpur Brigadier, SteelMC, FerrumC and LuckPerms.
@@ -211,3 +212,8 @@ clearance or a formal redistribution SBOM. Per-file license texts, generated
 assets, source distribution and network-source offer remain blockers.
 The Phase -1 retrospective approval gate remains active. Evidence in
 docs/IMPLEMENTATION_REFERENCE_AUDIT.md and docs/LICENSING.md.
+
+
+## 2026-10-23 shared preauth write deadline checkpoint
+
+RV-NET-03 closed a resource-limit asymmetry: an absolute three-second read budget existed while each outgoing write received a fresh three-second SO_SNDTIMEO. A first-party DeadlineWriter now enforces the remaining shared monotonic deadline on status replies and rejected login responses, with the narrower post-status Ping grace applied to its Pong. Three new TCP tests cover a past deadline, valid framed output and a non-reading receiver whose blocked 16MiB send completed with timeout after approximately 250ms. Full Rust suite 77 passed. This is NOT a throughput, admission-fairness or Horizon authentication result. Source rationale and limitations in docs/IMPLEMENTATION_REFERENCE_AUDIT.md; Phase -1 review hold remains active.
