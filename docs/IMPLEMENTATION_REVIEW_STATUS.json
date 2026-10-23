@@ -86,7 +86,7 @@
     },
     {
       "id": "REV-UTIL",
-      "status": "pending",
+      "status": "in_review",
       "paths": [
         "src/builtin/utilities.rs",
         "src/builtin/mod.rs"
@@ -99,10 +99,11 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/builtin/utilities.rs": "6c182dade3321bd2071645a27a4432b741b94938b1a12a4fe254b507d8b14dfa",
+        "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658",
         "src/builtin/mod.rs": "a8fef0663045ff45f57938541aa362d0885e841dfafc55d83b0eb9f50a0932e3"
       },
-      "design_evidence_partial": "RV-STORAGE-02 changed common implementation; behavior/parity review still pending."
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-UTIL-01 EssentialsX UserData/Commandhome comparisons and native key migration tradeoff",
+      "test_evidence_partial": "71 Rust tests; failing-before imported uppercase name lookup and collision tests; live release server legacy JSON import/rewrite/colliding warp denial; no real teleport."
     },
     {
       "id": "REV-STORAGE",
@@ -121,7 +122,7 @@
       "approved_sha256": {},
       "current_sha256": {
         "src/builtin/permissions.rs": "ac4ffede3639bb61a984a238a1e384a86050dd45d598ad34dd045fca0dfe875c",
-        "src/builtin/utilities.rs": "6c182dade3321bd2071645a27a4432b741b94938b1a12a4fe254b507d8b14dfa"
+        "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658"
       },
       "test_evidence_partial": "57 Rust tests; real 2-process lock, clean/SIGKILL restart and Java lifecycle; deterministic post-rename directory sync failure tests; real power-loss pending",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md REV-STORAGE-02 pre/post code comparisons and failure-state policy"

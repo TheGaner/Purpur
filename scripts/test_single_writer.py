@@ -7,6 +7,7 @@ Tests real processes and restarts; this is NOT a power-loss/fsync simulation.
 from pathlib import Path
 import subprocess
 import tempfile
+import json
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -80,6 +81,34 @@ def test():
         assert "user:alice test.qualified: Allow" in resumed.stdout
         assert "alice test.inherited: Deny" in resumed.stdout
         assert "group:staff test.inherited: Undefined" in resumed.stdout
-        print("PASS: second writer denied; clean/unclean restarts preserve data")
+        # Old/imported v1 JSON may use capitalized user, home and warp keys.
+        # Validate real console lookups, rewrite-on-save, and ambiguous startup.
+        legacy_root=root/"imported"
+        (legacy_root/"plugins").mkdir(parents=True)
+        (legacy_root/"data").mkdir()
+        loc={"world":"World","x":1.0,"y":64.0,"z":3.0}
+        legacy_file=legacy_root/"data"/"utilities.json"
+        legacy_file.write_text(json.dumps({"version":1,"homes":{"Alex":{"Base":loc}},
+                                          "warps":{"Spawn":loc}}))
+        legacy_args=[str(BINARY),"--bind","127.0.0.1:0",
+                     "--data",str(legacy_root/"data"),
+                     "--plugins",str(legacy_root/"plugins")]
+        converted=subprocess.run(legacy_args,input=
+            "home alex base\nwarp spawn\nsetwarp lobby World 1 65 2\nstop\n",
+            text=True,capture_output=True,cwd=legacy_root,timeout=8)
+        assert converted.returncode==0,(converted.stdout,converted.stderr)
+        assert "Home alex/base: World" in converted.stdout,converted.stdout
+        assert "spawn: World" in converted.stdout,converted.stdout
+        saved=json.loads(legacy_file.read_text())
+        assert list(saved["homes"])==["alex"]
+        assert list(saved["homes"]["alex"])==["base"]
+        assert "spawn" in saved["warps"] and "Spawn" not in saved["warps"]
+        saved["warps"]["Spawn"]=loc
+        legacy_file.write_text(json.dumps(saved))
+        conflict=subprocess.run(legacy_args,input="stop\n",text=True,
+            capture_output=True,cwd=legacy_root,timeout=8)
+        assert conflict.returncode!=0,(conflict.stdout,conflict.stderr)
+        assert "ambiguous case-colliding" in conflict.stderr,conflict.stderr
+        print("PASS: second writer denied; clean/unclean restarts, legacy utilities migration and collision rejection")
 if __name__=="__main__":
     test()

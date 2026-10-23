@@ -201,3 +201,15 @@ in-memory Grants test helper now denies when group traversal exceeds its
 64-subject bound rather than granting from a partial graph. The production
 native permission evaluator has different data, semantics and limits. This
 does not provide full Brigadier or Minecraft protocol-777 command support.
+
+
+### Legacy home/warp JSON compatibility
+
+Native utility data still uses JSON version 1 and ASCII-casefolded
+administrative home/warp names. On startup, existing imported JSON files
+with uppercase names are normalized in memory if unambiguous. Conflicting
+case aliases for user IDs, per-user homes or warps cause a fail-closed
+InvalidData startup error; records are NOT silently merged or discarded.
+Canonical names are persisted after the next successful mutation.
+World identifiers and coordinates remain unchanged. This is not a real
+teleport service or authenticated UUID ownership implementation.

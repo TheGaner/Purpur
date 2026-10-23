@@ -98,6 +98,9 @@ impl NativeUtilities {
                 ..Saved::default()
             }
         };
+        // Legacy v1 JSON may predate lowercased administrative keys. Reject
+        // ambiguous aliases rather than merging different saved locations.
+        let data = Self::canonicalize(data)?;
         Self::validate(&data)?;
         Ok(Self {
             file,
@@ -105,6 +108,40 @@ impl NativeUtilities {
             data,
             poisoned: false,
         })
+    }
+    fn canonicalize(mut data: Saved) -> io::Result<Saved> {
+        fn legacy_key(name: &str) -> io::Result<String> {
+            normalize(name).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "invalid legacy utility name")
+            })
+        }
+        fn collision() -> io::Error {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "ambiguous case-colliding legacy utility key",
+            )
+        }
+        let mut homes = BTreeMap::new();
+        for (user, positions) in data.homes {
+            let mut names = BTreeMap::new();
+            for (name, position) in positions {
+                if names.insert(legacy_key(&name)?, position).is_some() {
+                    return Err(collision());
+                }
+            }
+            if homes.insert(legacy_key(&user)?, names).is_some() {
+                return Err(collision());
+            }
+        }
+        let mut warps = BTreeMap::new();
+        for (name, position) in data.warps {
+            if warps.insert(legacy_key(&name)?, position).is_some() {
+                return Err(collision());
+            }
+        }
+        data.homes = homes;
+        data.warps = warps;
+        Ok(data)
     }
     fn validate(data: &Saved) -> io::Result<()> {
         let mut count = 0;
@@ -319,6 +356,49 @@ mod tests {
         let fresh = NativeUtilities::open(&path).unwrap();
         assert_eq!(fresh.warp("spawn"), Some(&newer));
         drop(fresh);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn unambiguous_legacy_case_keys_load_and_save_canonically() {
+        let (path, old) = service();
+        drop(old);
+        fs::write(&path, r#"{"version":1,"homes":{"Alex":{"Base":{"world":"World","x":1.0,"y":64.0,"z":3.0}}},"warps":{"Spawn":{"world":"World","x":1.0,"y":64.0,"z":3.0}}}"#).unwrap();
+        let mut db = NativeUtilities::open(&path).unwrap();
+        assert_eq!(db.home("alex", "base").unwrap().world, "World");
+        assert_eq!(db.warp("spawn").unwrap().world, "World");
+        db.set_warp("lobby", Position::new("world", 0.0, 65.0, 0.0).unwrap())
+            .unwrap();
+        drop(db);
+        let json = fs::read_to_string(&path).unwrap();
+        assert!(
+            json.contains("\"alex\"") && json.contains("\"base\"") && json.contains("\"spawn\"")
+        );
+        assert!(
+            !json.contains("\"Alex\"") && !json.contains("\"Base\"") && !json.contains("\"Spawn\"")
+        );
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn imported_case_collisions_fail_closed_in_all_key_spaces() {
+        let (path, old) = service();
+        drop(old);
+        let pos = r#"{"world":"world","x":1.0,"y":64.0,"z":3.0}"#;
+        let samples = [
+            format!(
+                r#"{{"version":1,"homes":{{"Alex":{{"base":{pos}}},"alex":{{"base":{pos}}}}}}}"#
+            ),
+            format!(r#"{{"version":1,"homes":{{"alex":{{"Base":{pos},"base":{pos}}}}}}}"#),
+            format!(r#"{{"version":1,"warps":{{"Spawn":{pos},"spawn":{pos}}}}}"#),
+        ];
+        for json in samples {
+            fs::write(&path, json).unwrap();
+            assert_eq!(
+                NativeUtilities::open(&path).err().unwrap().kind(),
+                io::ErrorKind::InvalidData
+            );
+        }
         let _ = fs::remove_file(&path);
         let _ = fs::remove_file(path.with_extension("json.lock"));
     }
