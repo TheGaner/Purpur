@@ -2,6 +2,32 @@
 
 Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON native Rust EssentialsX-style utilities and LuckPerms-style permissions; no Java JAR required. Optional external Java plugin compatibility remains a separate feature.
 
+## -1 — Mandatory source comparison and retrospective approval [ACTIVE; BLOCKS NEW FEATURES]
+
+**Standing rule for every change:** BEFORE implementation, inspect and compare all **materially relevant** reference implementations from Paper/Purpur, Folia, SteelMC, FerrumC, Horizon, LuckPerms, EssentialsX, and—where networking applies—Krypton, e4mc, PulseNet research. Recheck pinned source revisions, relevant classes/functions/algorithms, constraints, upstream tests, licenses, and our existing code. Document why any reference is inapplicable. Do not simply list project names.
+
+**BEFORE writing code:** record alternative designs and a selected implementation with explicit correctness, performance, compatibility, security, source-license and rollback evidence. **AFTER writing code:** run targeted tests and comparative benchmarks, audit whether an earlier/better implementation exists, and publish the evidence and any remaining gaps **before beginning a new feature**. Best-supported is a measurable, scoped engineering conclusion; no absolute fastest/best claim without evidence.
+
+**Retroactive freeze:** all previously implemented features are considered FUNCTIONALLY TESTED ONLY, NOT SOURCE-REVIEW APPROVED. **Do not progress into new feature milestones** (especially authentication/play, worldgen, scheduler or EssentialsX/LuckPerms feature expansion) until retrospective reviews and high-priority correctness issues are resolved or explicitly kept in a scoped review/fix milestone. Review-enabling tests, targeted fixes, and documentation are allowed; none bypass the before/after comparison.
+
+- [x] RV-00: Locate existing roadmap, pin current HEAD, inventory all current Rust source areas, run 48/48 Rust regressions and formatting, identify existing architecture reports as preliminary evidence.
+- [x] RV-01: Establish mandatory pre-/post-implementation reference-review procedure, comparison scope, licensing/benchmark policy, retrospective review ledger, and staleness checks. See [review and reference audit](IMPLEMENTATION_REFERENCE_AUDIT.md).
+- [ ] RV-NET: Verify prior protocol/network choices against Horizon 26.3, SteelMC, FerrumC, Paper/Purpur, and applicable networking implementations; review deadlines, auth, memory, concurrency, p95/p99, fairness.
+- [ ] RV-STATUS: Verify status/ping response framing, version behavior, limits and dynamic future semantics against Horizon and Paper/Purpur.
+- [ ] RV-CMD: Differentially audit command tree, argument parsing, suggestions and permissions against Paper/Purpur Brigadier, SteelMC, FerrumC and LuckPerms.
+- [ ] RV-PERM: Compare native Rust permissions to LuckPerms calculator, graph, contexts, cache and persistence, plus relevant SteelMC/Paper semantics.
+- [ ] RV-UTIL: Compare homes/warps and planned player actions against EssentialsX, Bukkit/Paper, and Folia owner-affine teleport.
+- [ ] RV-STORAGE: Audit JSON persistence durability and scaling against LuckPerms/EssentialsX and SteelMC/FerrumC before choosing a database design.
+- [ ] RV-PLUG: Audit native ABI safety, plugin lifecycle and Java bridge against Horizon Wasmtime, Paper/Purpur/Folia and upstream plugin needs; fix unsafe metadata pointer scan and potential blocking shutdown.
+- [ ] RV-TICK: Audit command work budgets, tick behavior and future ownership against Folia/Paper and SteelMC.
+- [ ] RV-LEGAL: Complete per-dependency SPDX/license inventory, notices, generated assets, copied-source policy and distribution/source offer.
+- [ ] RV-CLOSE: All retrospective rows APPROVED with current source digests, named source-code citations, reproducible verification and decision records. The review gate must pass; only then unfreeze new feature work.
+
+**Enforcement:** run python3 scripts/reference_review_gate.py --check for source-file inventory correctness, then python3 scripts/reference_review_gate.py --enforce for retrospective acceptance. Enforcement is **expected to fail until the above reviews are completed**. A clean build or 48 passing tests is not a waiver. For newly changed files, re-review and record the new source digest. Upstream references and accepted design evidence go into the existing audit—not a second roadmap.
+
+Gate: full retrospective evidence and no unresolved high-severity defects in affected modules, with measured/verified optimization decisions and preserved license provenance. This blocks proceeding just because the implementation compiles.
+
+
 Status: 2026-10-23, protocol 777 status/ping, nonplayable login rejection, simple 20Hz tick loop, Rust native plugin ABI, Java lifecycle-only bridge, now a shared Rust command registry. Not a playable game.
 
 ## 0 — Standalone foundation [PARTIAL]

@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "baseline_commit": "ab02a9644ba7679985f4aef839490f20fbfc39f1",
+  "reviews": [
+    {
+      "id": "REV-NET",
+      "status": "pending",
+      "paths": [
+        "src/network.rs",
+        "src/protocol.rs"
+      ],
+      "references": [
+        "Horizon",
+        "FerrumC",
+        "SteelMC",
+        "Paper/Purpur",
+        "networking specialists as applicable"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-STATUS",
+      "status": "pending",
+      "paths": [
+        "src/main.rs"
+      ],
+      "references": [
+        "Horizon",
+        "Paper/Purpur"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-CMD",
+      "status": "pending",
+      "paths": [
+        "src/command.rs",
+        "src/command/tree.rs"
+      ],
+      "references": [
+        "Paper/Purpur",
+        "SteelMC",
+        "FerrumC",
+        "LuckPerms"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-PERM",
+      "status": "pending",
+      "paths": [
+        "src/builtin/permissions.rs"
+      ],
+      "references": [
+        "LuckPerms",
+        "Paper",
+        "SteelMC"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-UTIL",
+      "status": "pending",
+      "paths": [
+        "src/builtin/utilities.rs",
+        "src/builtin/mod.rs"
+      ],
+      "references": [
+        "EssentialsX",
+        "Paper/Purpur",
+        "Folia"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-STORAGE",
+      "status": "pending",
+      "paths": [
+        "src/builtin/permissions.rs",
+        "src/builtin/utilities.rs"
+      ],
+      "references": [
+        "LuckPerms",
+        "EssentialsX",
+        "SteelMC",
+        "FerrumC"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-PLUG",
+      "status": "pending",
+      "paths": [
+        "src/native.rs",
+        "src/plugins.rs",
+        "java/HorizonJavaBridge.java"
+      ],
+      "references": [
+        "Horizon",
+        "Paper/Purpur",
+        "Folia",
+        "EssentialsX",
+        "LuckPerms"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-TICK",
+      "status": "pending",
+      "paths": [
+        "src/main.rs"
+      ],
+      "references": [
+        "Folia",
+        "SteelMC",
+        "Paper/Purpur"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    },
+    {
+      "id": "REV-LEGAL",
+      "status": "pending",
+      "paths": [
+        "LICENSE",
+        "Cargo.toml",
+        "Cargo.lock",
+        "THIRD_PARTY_NOTICES.md"
+      ],
+      "references": [
+        "Purpur",
+        "Folia",
+        "SteelMC",
+        "FerrumC",
+        "Horizon",
+        "EssentialsX",
+        "LuckPerms"
+      ],
+      "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
+      "approved_sha256": {}
+    }
+  ]
+}
