@@ -316,3 +316,21 @@ cached answer for another requested node/world. Relevant expiring
 rules still invalidate the decision at the expiration timestamp.
 These guarantees do not establish full LuckPerms priority/context parity
 or a measured performance improvement.
+
+
+### Security warning: trusted native plugins only
+
+Rust native .so plugins are loaded directly into the server process with
+full process privileges, not sandboxed. Their lifecycle, command and tick
+callbacks run synchronously. A plugin that crashes, corrupts memory or
+never returns can crash or indefinitely stall the server, including
+startup and shutdown. The optional Java sidecar's bounded shutdown does
+NOT isolate or time-limit native Rust/C callbacks.
+
+Only load native shared libraries you fully trust and have reviewed.
+To reproduce the nonreturning-callback failure safely, run
+python3 -B scripts/test_native_plugin_nontermination.py after the release
+build. The fixture compiles a temporary C plugin and kills ONLY its own
+disposable test child. The expected successful test result is a confirmed
+exposure, not a fix. Wasmtime-style fuel and memory sandboxing or a
+separate process/IPC plugin host remain future design prerequisites.

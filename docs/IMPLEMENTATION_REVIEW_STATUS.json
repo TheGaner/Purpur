@@ -142,7 +142,8 @@
         "src/native.rs",
         "src/plugins.rs",
         "java/HorizonJavaBridge.java",
-        "scripts/test_plugin_lifecycle.py"
+        "scripts/test_plugin_lifecycle.py",
+        "scripts/test_native_plugin_nontermination.py"
       ],
       "references": [
         "Horizon",
@@ -157,10 +158,11 @@
         "src/native.rs": "a112f4bcf4cc75b37ff4e76bbaca2fbf6a664e440533112a33539a4774dbaa99",
         "src/plugins.rs": "e653468387244e249d44e8cf95f67cd94149e961d5c0a438c4e9fb99551df4e8",
         "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276",
-        "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b"
+        "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b",
+        "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59"
       },
-      "test_evidence_partial": "51 Rust tests, plugin lifecycle smoke, slow-drip TCP tests; full approval criteria not yet met.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md targeted pre/post review"
+      "test_evidence_partial": "84 Rust tests baseline; normal/hung Java lifecycle and v2 native manifest tests; RV-PLUG-02 isolated release child with nonreturning native enable callback stays blocked after stop until harness kill/reap at 1.202s. Exposure verified, NO runtime isolation implemented.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-02 pinned Horizon Wasmtime memory/fuel versus unsafe in-process native ABI comparison and separation options."
     },
     {
       "id": "REV-TICK",
