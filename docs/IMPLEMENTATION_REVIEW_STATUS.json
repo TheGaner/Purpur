@@ -152,7 +152,8 @@
         "scripts/experiment_native_process_boundary.py",
         "scripts/experiment_wasmtime_core_limits.py",
         "scripts/experiment_wasmtime_component_contract.py",
-        "scripts/fixtures/server-plugin-probe.wit"
+        "scripts/fixtures/server-plugin-probe.wit",
+        "scripts/experiment_wasmtime_component_host_limits.py"
       ],
       "references": [
         "Horizon",
@@ -173,10 +174,11 @@
         "scripts/experiment_native_process_boundary.py": "d5530452eb66637ae5b314ea35925de2908a363c218d11ffedf12dc202e97eb5",
         "scripts/experiment_wasmtime_core_limits.py": "f3c5473c366d940a27c2269846e5bdd76b137a73d6f1401a25c352c51bcb54a5",
         "scripts/experiment_wasmtime_component_contract.py": "a64c4ffd38b81f1b85b5f680a06f9c455a74c41c150f6138bb597cb54f87ffe5",
-        "scripts/fixtures/server-plugin-probe.wit": "e0567725394a06b288c85cfdf89c9c01eba1fcf1fa3299aeb9e46b86d64db867"
+        "scripts/fixtures/server-plugin-probe.wit": "e0567725394a06b288c85cfdf89c9c01eba1fcf1fa3299aeb9e46b86d64db867",
+        "scripts/experiment_wasmtime_component_host_limits.py": "7579272fd81857a10e869d54c03727d834fc51d2faeacf12458fa8ff9fa81c5b"
       },
-      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 native worker normal/crash/hang/filesystem 8/8, RV-PLUG-07 core Wasm six checks and RV-PLUG-08 genuine Wasmtime Component Model typed host import/guest export, missing import denial, wrong type, 150ms blocking host callback, 500-fuel trap and recovery 8/8. Native Rust plugin engine remains unsandboxed; no server WIT host integration.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05/06/07/08 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Wasmtime rejects server side, native sidecar FS escape, core and Component Model import/type/fuel results, manual WIT-shaped u32 contract, remaining host work budgets and legal gates."
+      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 native subprocess 8/8; RV-PLUG-07 core Wasm 6/6; RV-PLUG-08 typed genuine Component Model 8/8; RV-PLUG-09 host Store 64KiB memory cap vs uncapped control and externally incremented epoch interrupts guest loop + fresh store success 4/4; no integrated plugin sandbox and native .so still hangs.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05/06/07/08/09 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Side::Server limitation; core and Component Model host import/fuel/memory/epoch proofs, explicit blocking host callback non-cancellation and native sidecar FS exposure; incomplete real server host/security/license requirements."
     },
     {
       "id": "REV-TICK",
