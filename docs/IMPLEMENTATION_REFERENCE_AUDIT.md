@@ -21,11 +21,87 @@ The master roadmap is docs/ROADMAP.md. This file owns review evidence; it is not
 9. Record exact changed files, source digests, evidence links, test commands and results, remaining risks and why the selected solution is best supported for its stated use case. A green unit suite alone does not clear this step.
 10. Only mark a review APPROVED if these criteria are evidenced; otherwise keep PENDING or IN_REVIEW and block unrelated new features. Changed source invalidates prior approval. A minimal security hotfix may be reviewed and verified as the focused next action, but it cannot bypass the gate.
 
+## Reference hierarchy and actual Purpur parity evidence — 2026-10-23
+
+**Binding compatibility policy:** Our primary behavior oracle is Purpur at
+pinned SHA 5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0, including its
+patches plus inherited Paper and vanilla behavior. Paper is an ancestor,
+not a replacement primary oracle. For features changed by Purpur, the
+effective Purpur behavior wins. The project seeks idiomatic Rust internals,
+NOT a line-by-line Java translation. Preserve observed defaults, world
+overrides, commands, events, plugin-visible effects and error cases; an
+intentional divergence must be explicitly approved and tested.
+
+Primary Purpur source actually inspected in this review:
+- purpur-server/src/main/java/org/purpurmc/purpur/PurpurConfig.java,
+  init, readConfig, registerCommands: initializes main YAML, sets
+  defaults, tracks config-version 50 at this pin, and registers the
+  Purpur command using the inherited Bukkit CommandMap.
+  https://github.com/PurpurMC/Purpur/blob/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0/purpur-server/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+- purpur-server/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java,
+  init and getString/getBoolean/getInt/getConfigurationSection:
+  world-settings.default values provide fallbacks for namespaced
+  world settings, with a migration path for earlier config versions.
+  https://github.com/PurpurMC/Purpur/blob/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0/purpur-server/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+- Pinned Purpur README confirms a patch-based Paper derivative; the
+  effective server may require inspecting applied Paper/Minecraft code:
+  https://github.com/PurpurMC/Purpur/blob/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0/README.md
+
+Secondary reference selection, after establishing the behavior:
+Horizon for protocol 777 and target client/Wasm constraints;
+SteelMC and FerrumC for Rust design and worldgen/network/storage choices;
+Folia for owner-thread and region scheduling; LuckPerms and EssentialsX
+for semantics of the optional-service features we separately implement
+as always-on first-party Rust; specialized transport projects when useful.
+Do NOT import a reference behavior that contradicts Purpur accidentally.
+Full imported-source license/provenance inspection remains mandatory.
+
+### Feature fidelity inventory (claims must be evidence-scoped)
+
+| Subsystem | Implemented Rust subset | Behavioral reference | Proven Purpur parity |
+| --- | --- | --- | --- |
+| Status and pre-auth networking | Protocol 777 status/ping, bounded frame/worker/deadline, login rejection | Purpur/Paper status, login; Horizon codec; FerrumC transport | NO executable Purpur-vs-Rust oracle yet, though real Rust TCP fixtures pass |
+| Console commands | Bounded lexer, canonical aliases, command tree, permission filtering, console management | Purpur/Paper Brigadier and CommandMap; SteelMC alternatives | NO Purpur differential command corpus; no player command packets |
+| Permissions | First-party allow/deny/undefined, group inheritance/cache and JSON file | Purpur/Paper permissions; LuckPerms extra service semantics | NOT full LuckPerms semantics or player/plugin authority |
+| Homes and warps | Validated persisted coordinate data and admin commands | EssentialsX services; Purpur/Paper player/event behavior | No player teleport, UUID identity, cooldowns or event parity |
+| Plugins | Trusted in-process native C ABI, lifecycle-only Java bridge, isolated Wasmtime research fixtures | Purpur/Paper Bukkit APIs, Folia thread constraints, Horizon Wasmtime | No Bukkit/Purpur API parity and no integrated safe Wasm execution |
+| Simulation/ticks | Targeted 20Hz cooperative console budget, no world simulation | Purpur/Paper tick and gameplay; Folia/SteelMC for architecture | No simulation/output comparison or actual gameplay |
+| Configuration and worldgen | No Purpur config engine, chunks or worldgen | Purpur global/world config and seeded output; SteelMC generator candidates | NOT IMPLEMENTED or compared |
+
+These are qualitative evidence statements, not a percentage of total
+Purpur features. Many source-reviewed fixes cite exact Horizon/SteelMC/
+FerrumC behavior, while the legacy audit had few detailed Purpur
+implementation citations. Compiling and 92 passing Rust tests verify a
+prototype subset, NOT Purpur behavioral or performance equivalence.
+
+### Per-feature comparison requirements before a parity claim
+
+Document for each feature:
+1. Pin matching Purpur revision, inherited Paper behavior, applicable
+   default config and at least one changed override when configurable.
+2. Identify exact Purpur effective path/function/patch, input conditions,
+   output, errors, permissions, events, determinism and threading.
+3. Contrast Horizon client/protocol constraints and applicable Rust,
+   Folia, LuckPerms, EssentialsX or networking alternatives, including
+   whether any are behaviorally incompatible with the primary target.
+4. Implement a first-party Rust design and record license/provenance,
+   architecture, security and measured performance tradeoffs.
+5. Execute a version-matched Purpur-vs-Rust golden/replay test (packets,
+   commands, config, state or seeded world output as appropriate).
+   Capture both outputs and a documented divergence policy.
+   Mark unavailable reference runs as UNVERIFIED rather than passing.
+
+**Evidence levels:** local implementation verified; source compared;
+differentially verified; intentionally divergent with approved contract.
+A source comparison by itself never grants differential verification.
+The Phase -1 gate remains active with nine unapproved subsystems. This
+policy does NOT import upstream code or assert new Purpur features exist.
+
 ## Reference pool, to consider per applicable subsystem
 
 | Source | Pinned primary reference | Relevant questions |
 | --- | --- | --- |
-| Purpur/Paper | https://github.com/PurpurMC/Purpur/tree/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0 and https://docs.papermc.io/paper/dev/command-api/basics/introduction/ | vanilla/configuration, command Brigadier, Bukkit/Paper APIs, events |
+| **Purpur/Paper (PRIMARY behavioral target)** | https://github.com/PurpurMC/Purpur/tree/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0 and https://docs.papermc.io/paper/dev/command-api/basics/introduction/ | effective Purpur 26.3 default/override config, commands, events, packets, inherited Paper/vanilla behavior; matching-version differential tests for parity claims |
 | Folia | https://github.com/PaperMC/Folia/tree/8cffa9059ad6bbc2b28510c38ed61a51098d4971 | region ownership, entity/global schedulers, plugin thread safety |
 | SteelMC | https://github.com/Steel-Foundation/SteelMC/tree/dc8eaba7ff21c348226a05741c2fb9809a8ca90d | Rust command arena/queue, worldgen, scheduling, permissions |
 | FerrumC | https://github.com/ferrumc-rs/ferrumc/tree/51830e99675deae1f6cdbb62bf5d32b3d25c1c76 | networking, Rust storage, command graphs, game-data ownership |

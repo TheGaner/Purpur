@@ -2,6 +2,30 @@
 
 These are read-only upstream HEAD snapshots captured on October 23, 2026. They are reference pins, **not copied code**. Update a pin, check the license and generate new parity results before importing. No Git dependency currently points to these revisions.
 
+
+## How source pins are used
+
+**Purpur 26.3 is the PRIMARY server behavior reference.**
+Inspect the pinned assembled Purpur server semantics (Purpur patches
+PLUS inherited Paper/vanilla implementation), then compare candidate
+Rust architectures from SteelMC/FerrumC, Horizon protocol and component
+model ideas, Folia scheduling, and optional LuckPerms/EssentialsX service
+semantics. The winning design may be structurally different from Java
+but must reproduce chosen observable outputs unless a divergence is
+explicitly documented and approved.
+
+The below commits are immutable reproducibility anchors, not proof of
+full Purpur parity, current upstream HEAD, or permission to copy code.
+The source-audit fidelity matrix and required behavioral differential
+fixture contract are in IMPLEMENTATION_REFERENCE_AUDIT.md.
+
+Concrete Purpur entry points read at the pinned SHA:
+- https://github.com/PurpurMC/Purpur/blob/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0/purpur-server/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+  global YAML/defaults and command registration
+- https://github.com/PurpurMC/Purpur/blob/5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0/purpur-server/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+  per-world fallback and configuration migration
+
+
 | Reference | Upstream ref | SHA | License |
 | --- | --- | --- | --- |
 | [SteelMC](https://github.com/Steel-Foundation/SteelMC/tree/dc8eaba7ff21c348226a05741c2fb9809a8ca90d) | master | dc8eaba7ff21c348226a05741c2fb9809a8ca90d | AGPL-3.0-or-later |

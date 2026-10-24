@@ -2,6 +2,32 @@
 
 Goal: standalone Rust-only Horizon server with Purpur parity and ALWAYS-ON native Rust EssentialsX-style utilities and LuckPerms-style permissions; no Java JAR required. Optional external Java plugin compatibility remains a separate feature.
 
+
+## Primary behavioral reference: Purpur 26.3 [ACTIVE DECISION]
+
+**Compatibility rule:** Purpur at the pinned ver/26.3 commit, including its
+applied patches and inherited Paper/vanilla behavior, is the primary
+observable-behavior target for each feature that Purpur actually provides.
+Start comparisons with Purpur effective defaults, configuration overrides,
+command syntax/permissions, events, packet effects, and error cases.
+Use Horizon for client/protocol constraints, SteelMC and FerrumC as
+alternative Rust implementations, Folia for region ownership, and
+LuckPerms/EssentialsX for extra native service contracts. We are NOT
+translating Purpur's Java class architecture; prefer independently written
+Rust designs when their observable semantics match or an intentional
+difference is documented and approved.
+
+**Evidence distinction:** implementation of our current subset is not the
+same as Purpur parity. Source review alone is not executable parity.
+Future parity claims require a reproducible Purpur-26.3-versus-Rust
+differential corpus, matching configurations and versions, with explicit
+exceptions and relevant performance data. Current reference fidelity and
+unimplemented areas are inventoried in
+[the mandatory reference audit](IMPLEMENTATION_REFERENCE_AUDIT.md);
+immutable source pins are in [SOURCE_REVISIONS.md](SOURCE_REVISIONS.md).
+Phase -1 remains active and no retrospective row is approved by this policy.
+
+
 ## -1 — Mandatory source comparison and retrospective approval [ACTIVE; BLOCKS NEW FEATURES]
 
 **Standing rule for every change:** BEFORE implementation, inspect and compare all **materially relevant** reference implementations from Paper/Purpur, Folia, SteelMC, FerrumC, Horizon, LuckPerms, EssentialsX, and—where networking applies—Krypton, e4mc, PulseNet research. Recheck pinned source revisions, relevant classes/functions/algorithms, constraints, upstream tests, licenses, and our existing code. Document why any reference is inapplicable. Do not simply list project names.
@@ -129,7 +155,7 @@ Gate: playable correct chunks across all dimensions and reproducible benchmark i
 - [ ] Persistent NBT/chunks/region data, blocks, shapes, fluid/light, entities, collision, combat, redstone, inventory, recipes.
 - [ ] Commands/selectors/scoreboard/advancements, game rules and Purpur configs.
 - [ ] Seed and packet replay oracle for original Purpur 26.3 behaviors; differential acceptance, tests per toggle.
-Gate: survival, commands and configuration parity for documented subset.
+Gate: survival, commands and configuration parity for documented subset, validated by actual matching-version Purpur reference-versus-Rust fixtures and explicitly approved differences.
 
 ## 5 — Extensibility and optional Java API compatibility [PLANNED]
 - [ ] Shared command/event/permissions/world/player APIs and stable event cancellation/order.
