@@ -143,7 +143,8 @@
         "src/plugins.rs",
         "java/HorizonJavaBridge.java",
         "scripts/test_plugin_lifecycle.py",
-        "scripts/test_native_plugin_nontermination.py"
+        "scripts/test_native_plugin_nontermination.py",
+        "scripts/test_native_plugin_order.py"
       ],
       "references": [
         "Horizon",
@@ -156,13 +157,14 @@
       "approved_sha256": {},
       "current_sha256": {
         "src/native.rs": "a112f4bcf4cc75b37ff4e76bbaca2fbf6a664e440533112a33539a4774dbaa99",
-        "src/plugins.rs": "e653468387244e249d44e8cf95f67cd94149e961d5c0a438c4e9fb99551df4e8",
+        "src/plugins.rs": "1cd4b7c2a168e47f49b8f804047b999fe0cc849a56cde49fc65b3903fa979123",
         "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276",
         "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b",
-        "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59"
+        "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59",
+        "scripts/test_native_plugin_order.py": "abd0c6ac1bf3777908b8eeeadec2c6bf01d8b9aeddac686a5cf8db1b57145b89"
       },
-      "test_evidence_partial": "84 Rust tests baseline; normal/hung Java lifecycle and v2 native manifest tests; RV-PLUG-02 isolated release child with nonreturning native enable callback stays blocked after stop until harness kill/reap at 1.202s. Exposure verified, NO runtime isolation implemented.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-02 pinned Horizon Wasmtime memory/fuel versus unsafe in-process native ABI comparison and separation options."
+      "test_evidence_partial": "85 Rust tests; RV-PLUG-02 isolated nonreturning native enable callback still stalls; RV-PLUG-03 reproduced first-plugin winner changing with reverse file creation before fix and 3/3 release-server creation-order trials pass after .so filename sorting; Java normal/hung lifecycle and manifest v2 smoke. No plugin isolation.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-02 native execution risks and RV-PLUG-03 pinned Horizon sorted mod discovery, SteelMC registration comparison, before/after ordering evidence and tradeoffs."
     },
     {
       "id": "REV-TICK",

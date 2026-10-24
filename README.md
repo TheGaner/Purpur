@@ -344,3 +344,16 @@ characters. Executing oversized input returns TooLong; requesting
 completions for oversized input returns no suggestions. This is a bounded,
 protocol-neutral prototype API, not complete Brigadier parsing or client
 suggestion packet support.
+
+
+### Native plugin loading order
+
+Within the experimental trusted-native plugin directory, shared libraries
+are loaded in Rust path/filename order instead of filesystem discovery
+order. Native command declarations remain first-registration-wins and
+colliding later declarations are rejected. This makes ownership repeatable,
+not compatible with Bukkit/Paper plugin dependency ordering. Test with
+python3 -B scripts/test_native_plugin_order.py after building the release
+binary. The tool creates two disposable C plugins under temporary paths
+and runs isolated server children; no user plugin directory is changed.
+Native callbacks remain unsandboxed; see the separate security warning.

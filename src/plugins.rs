@@ -19,15 +19,22 @@ impl Plugins {
         let mut rust = vec![];
         #[cfg(unix)]
         if let Ok(files) = fs::read_dir(base.join("rust")) {
-            for entry in files.flatten() {
-                if entry.path().extension().is_some_and(|s| s == "so") {
-                    match native::Plugin::load(&entry.path()) {
-                        Ok(p) => {
-                            println!("[rust] loaded {}", p.name);
-                            rust.push(p)
-                        }
-                        Err(e) => eprintln!("[rust] plugin failed: {e}"),
+            // Native command labels are first-registration-wins. Filesystem
+            // enumeration is unspecified; choose a reproducible owner when
+            // two plugins declare a conflicting name or alias.
+            let mut paths: Vec<_> = files
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|s| s == "so"))
+                .collect();
+            paths.sort();
+            for path in paths {
+                match native::Plugin::load(&path) {
+                    Ok(p) => {
+                        println!("[rust] loaded {}", p.name);
+                        rust.push(p)
                     }
+                    Err(e) => eprintln!("[rust] plugin failed: {e}"),
                 }
             }
         }
