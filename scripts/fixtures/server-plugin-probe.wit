@@ -1,0 +1,10 @@
+package purpur:plugin-review@0.1.0;
+
+// Review-only server-side contract sketch, not a shipped plugin SDK.
+// This file documents the typed import/export signature exercised by
+// the hand-authored component-text fixture. No generated bindgen or
+// production server implementation is claimed.
+world server-probe {
+    import note: func(value: u32);
+    export run: func(value: u32) -> u32;
+}
