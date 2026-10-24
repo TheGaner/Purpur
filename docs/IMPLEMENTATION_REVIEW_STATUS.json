@@ -148,7 +148,8 @@
         "java/HorizonJavaBridge.java",
         "scripts/test_plugin_lifecycle.py",
         "scripts/test_native_plugin_nontermination.py",
-        "scripts/test_native_plugin_order.py"
+        "scripts/test_native_plugin_order.py",
+        "scripts/experiment_native_process_boundary.py"
       ],
       "references": [
         "Horizon",
@@ -165,10 +166,11 @@
         "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276",
         "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b",
         "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59",
-        "scripts/test_native_plugin_order.py": "bef42bab89ce2ac56b5097fdee0b30f306c30357d071e385728ef7448ec4fc12"
+        "scripts/test_native_plugin_order.py": "bef42bab89ce2ac56b5097fdee0b30f306c30357d071e385728ef7448ec4fc12",
+        "scripts/experiment_native_process_boundary.py": "d5530452eb66637ae5b314ea35925de2908a363c218d11ffedf12dc202e97eb5"
       },
-      "test_evidence_partial": "92 Rust tests; RV-PLUG-04 native enable C marker moved after complete JSON store preflight (two-writer/corrupt data); RV-PLUG-02 nonreturning native callbacks still NOT isolated; Java normal/hung lifecycle and native command ordering regressions.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Wasmtime runtime rejects Side::Server; official Wasmtime fuel/epoch/host import caveats; provisional new server WIT sandbox vs native child isolation, explicit unimplemented acceptance matrix."
+      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 independent native worker 8/8 two-trial normal/SIGSEGV/hang/same-user host-file tests: crashing/hanging workers killed and reaped; same-user filesystem write proves incomplete sandbox. RV-PLUG-02 actual Rust server still hangs on native .so. No server isolation integration.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05/06 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Wasmtime client-only limitation and observed worker process crash/hang containment versus retained filesystem permissions; C versus D options unapproved."
     },
     {
       "id": "REV-TICK",

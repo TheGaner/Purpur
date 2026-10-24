@@ -62,3 +62,19 @@ Regression prerequisites: Rust suite, scripts/test_native_plugin_nontermination.
 Before any code change, pin the Wasmtime crate version and exact license/dependency profile, confirm component feature and toolchain, then author the smallest **server-specific** WIT interface with one log callback and one safe bounded event; do NOT reuse the Horizon client interface unchanged. Bench CPU/fuel/epoch behavior, memory and host import time. Independently decide the native .so opt-in or subprocess migration; no thread watchdog is acceptable as an isolation substitute.
 
 The parent REV-PLUG, RV-CLOSE and nine retrospective review rows remain IN_REVIEW. This document does not authorize gameplay, server plugin API claims, a new runtime dependency, or publication as a secure sandbox.
+
+
+## RV-PLUG-06 — measured native-worker boundary experiment (not integrated)
+
+This is a disposable process feasibility harness, NOT integrated into the Minecraft Rust server. To reproduce: python3 -B scripts/experiment_native_process_boundary.py. It compiles a short first-party native C ABI test callback, launches it from an isolated Python worker after reporting a flushed entry marker, then supervises completion or kills and reaps only its own worker process group. The marker excludes Python startup time from callback observations. Core dumps are disabled.
+
+| Callback | Trial 1 | Trial 2 | Verified outcome |
+|---|---:|---:|---|
+| Normal return 7 | 0.007s | 0.006s | Worker exits normally; supervisor survives |
+| Direct invalid memory write | 0.059s | 0.063s | Child SIGSEGV (-11), supervisor survives |
+| Infinite pause | 0.801s | 0.801s | Child SIGKILL (-9) at 0.8s callback timeout, supervisor survives |
+| Write test-only host-side file | 0.006s | 0.005s | Child can access/write a file outside its plugin path with same host user privileges |
+
+Incidental local timings are not benchmarks of production plugin execution latency or throughput. The first experimental C raise(SIGSEGV) variant stalled in this sandbox, and a text-buffered readiness read swallowed a fast normal-result marker; final passing harness uses a direct C null write and binary unbuffered marker read. Eight final trials passed. Only temporary test files and ephemeral children were used.
+
+Option C therefore demonstrates child fault containment and supervised termination under these conditions AND demonstrates missing filesystem protection. Before claiming a secure native plugin process, it must enforce OS credentials/file/network/sandbox policy, bounded authenticated IPC, process descendant escape control, resource quotas, permission and tick ownership checks, and complete server lifecycle integration. Existing Rust .so plugins still run IN-PROCESS without containment. Option D Wasmtime remains provisional and no such engine was installed in this session. No review approval is implied.
