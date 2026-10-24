@@ -334,3 +334,13 @@ build. The fixture compiles a temporary C plugin and kills ONLY its own
 disposable test child. The expected successful test result is a confirmed
 exposure, not a fix. Wasmtime-style fuel and memory sandboxing or a
 separate process/IPC plugin host remain future design prerequisites.
+
+
+### Command input size contract
+
+Command execution and label completion both reject input exceeding 4096
+original UTF-8 bytes, before stripping leading whitespace or slash
+characters. Executing oversized input returns TooLong; requesting
+completions for oversized input returns no suggestions. This is a bounded,
+protocol-neutral prototype API, not complete Brigadier parsing or client
+suggestion packet support.

@@ -478,6 +478,11 @@ impl Registry {
         source: &Source<'_>,
         permissions: &dyn Permissions,
     ) -> Vec<String> {
+        // Completion and execution share the same bounded input contract.
+        // Check before trimming, especially before dropping repeated slashes.
+        if input.len() > MAX_LINE {
+            return vec![];
+        }
         let q = input.trim_start().trim_start_matches('/');
         // Only label completions are supported; argument/tab/tree completions are a later milestone.
         if q.contains(char::is_whitespace) {
@@ -517,6 +522,11 @@ impl Registry {
         permissions: &dyn Permissions,
         snapshot: &Snapshot<'_>,
     ) -> Result<Reply, Error> {
+        // Validate original bytes: stripping leading whitespace/slashes
+        // before tokenize used to bypass MAX_LINE for a valid command.
+        if input.len() > MAX_LINE {
+            return Err(Error::TooLong);
+        }
         let trimmed = input.trim_start().trim_start_matches('/');
         let args = tokenize(trimmed)?;
         if args.is_empty() || args[0].is_empty() {
@@ -668,6 +678,40 @@ mod tests {
         );
         assert!(tokenize("hi \"open").is_err());
         assert!(tokenize("hi \\").is_err());
+    }
+    #[test]
+    fn completion_rejects_oversized_input_consistently_with_execution() {
+        let registry = Registry::builtins();
+        let grants = Grants::default();
+        let source = Source::Console;
+        assert!(
+            registry
+                .complete("/".repeat(MAX_LINE + 1).as_str(), &source, &grants)
+                .is_empty(),
+            "oversized slash-only input must not list all commands"
+        );
+        assert!(registry
+            .complete("/ver", &source, &grants)
+            .contains(&"version".to_string()));
+        assert!(registry
+            .complete("st", &source, &grants)
+            .contains(&"stop".to_string()));
+        assert!(matches!(
+            registry.execute(&"/".repeat(MAX_LINE + 1), &source, &grants, &state()),
+            Err(Error::TooLong)
+        ));
+        assert!(
+            matches!(
+                registry.execute(
+                    &format!("{}stop", "/".repeat(MAX_LINE + 1)),
+                    &source,
+                    &grants,
+                    &state()
+                ),
+                Err(Error::TooLong)
+            ),
+            "oversized slash prefix cannot authorize or execute stop"
+        );
     }
     #[test]
     fn tokenizer_rejects_large_input() {
