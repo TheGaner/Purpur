@@ -9,7 +9,9 @@
         "src/network.rs",
         "src/protocol.rs",
         "scripts/test_peer_admission.py",
-        "scripts/bench_admission.py"
+        "scripts/bench_admission.py",
+        "scripts/purpur_status_diff.py",
+        "scripts/test_purpur_status_diff.py"
       ],
       "references": [
         "Horizon",
@@ -24,10 +26,12 @@
         "src/network.rs": "3f35222d28acfe950cfd1f49ba9c824fa1e94dba9a5eac76988e6345b767030f",
         "src/protocol.rs": "31acce580f5e8e58341eb42fae96d136c13d05de4a17e68cf9b03543d1fea628",
         "scripts/test_peer_admission.py": "6c0e92a8296165ce240280c324bcaa395ef7076d9795a0e5863877443092076d",
-        "scripts/bench_admission.py": "b3829a0eff563b2cc1d33e0c16276aba59e7026147df7549d8b7949e945507f5"
+        "scripts/bench_admission.py": "b3829a0eff563b2cc1d33e0c16276aba59e7026147df7549d8b7949e945507f5",
+        "scripts/purpur_status_diff.py": "8090aaedabf5de985faad294714a4561e2c32e79ad3abc9f05e446b2dee88f0a",
+        "scripts/test_purpur_status_diff.py": "35f682d208acf1151f8f165854183b5e45fe9cc9daba6310e345aec9f4a3b3f8"
       },
-      "test_evidence_partial": "92 Rust tests; RV-NET-01..06 timed TCP transport, per-IP cap and fairness; RV-NET-07 verified ready banner delayed until plugin setup/accept worker, peer TCP quota fixture and two-trial benchmark adapted to complete deadline-bounded banner with 24/24 distinct-source successes per trial; status-only protocol 777, not DDoS proof.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-12/RV-NET-07: pinned Horizon plugin load and server startup readiness difference, no JVM/client side code transplant; bounded readiness parser and real TCP result. Wider transport review remains in_review."
+      "test_evidence_partial": "92 Rust tests; source-limited TCP deadlines/fairness fixtures; RV-NET-08 pinned Purpur status/protocol-777 differential harness with bounded frame and separate ping echo, eight comparator tests and real candidate self-check; actual Purpur endpoint not yet run, incomplete network login/auth parity.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-08: pinned Purpur 26.3/2654 source+artifact identity primary behavioral oracle; Horizon client protocol codec and FerrumC bounded transport secondary; no active Purpur TCP fixture claim."
     },
     {
       "id": "REV-STATUS",
@@ -35,7 +39,9 @@
       "paths": [
         "src/main.rs",
         "scripts/bench_status.py",
-        "scripts/test_status_motd.py"
+        "scripts/test_status_motd.py",
+        "scripts/purpur_status_diff.py",
+        "scripts/test_purpur_status_diff.py"
       ],
       "references": [
         "Horizon",
@@ -43,12 +49,14 @@
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
-      "test_evidence_partial": "92 Rust tests; RV-STATUS-02 capped MOTD/JSON real TCP; RV-PLUG-12 startup status fixture waits for complete ready banner and verifies live protocol-777 status replies. Broader review not approved.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STATUS-02/RV-NET-06 pinned Horizon Str decoder, FerrumC writer, conservative byte-size cap, alternatives and verified boundaries.",
+      "test_evidence_partial": "92 Rust tests; bounded real TCP status/MOTD tests; RV-STATUS-03 verified official Purpur 26.3 build 2654 source-pinned artifact MD5/SHA256/ZIP, built explicit status+ping differential probe, eight unit cases and live Rust-vs-Rust self-check. NO EULA accepted and NO live Purpur behavior captured; parity unverified.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STATUS-03/RV-NET-08: Purpur 26.3 primary runtime oracle exact artifact SHA, intended field-level parity, Horizon protocol transport, documented prototype divergences; API metadata and artifact are not runtime parity evidence.",
       "current_sha256": {
         "src/main.rs": "c88e03b5acc1260b00b3a5a2ef52b881b4711402f128d23bc7fe13c3f21983c9",
         "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5",
-        "scripts/test_status_motd.py": "ba22444ab56c423bb915ef473faf3094d06be38e02b536e08f3bfa6707f534a7"
+        "scripts/test_status_motd.py": "ba22444ab56c423bb915ef473faf3094d06be38e02b536e08f3bfa6707f534a7",
+        "scripts/purpur_status_diff.py": "8090aaedabf5de985faad294714a4561e2c32e79ad3abc9f05e446b2dee88f0a",
+        "scripts/test_purpur_status_diff.py": "35f682d208acf1151f8f165854183b5e45fe9cc9daba6310e345aec9f4a3b3f8"
       }
     },
     {

@@ -94,6 +94,27 @@ Homes and warps currently store and report coordinates; teleport is blocked unti
 
 ## Network admission and measured status performance
 
+Purpur 26.3 is the primary behavioral reference (including inherited
+Paper semantics), while Horizon, SteelMC, FerrumC and Folia help select
+the underlying Rust implementation. The first review-only differential
+status/ping harness can compare a manually configured, owner-authorized
+running Purpur build 2654 server with this Rust release build:
+
+    python3 -B scripts/purpur_status_diff.py --reference 127.0.0.1:25565 --output /tmp/purpur-status.json
+
+It launches the Rust status-only candidate in temporary directories,
+decodes both protocol-777 status responses, checks pong echoes and
+reports explicit field differences. It does NOT download/start Purpur,
+accept a server EULA or authenticate a remote server as Purpur build 2654.
+A developer must match MOTD, online population and other settings and
+verify the binary identity. The unrelated offline transport self-check
+is:
+
+    python3 -B scripts/purpur_status_diff.py --self-check
+
+Self-check success is not Purpur parity evidence. The real server still
+has no gameplay or Bukkit compatibility.
+
 The startup address banner is emitted only after native plugin enable callbacks
 and creation of the TCP accept thread. A nonreturning trusted native callback
 can still hang the server **before** readiness; this fix avoids a misleading

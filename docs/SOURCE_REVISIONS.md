@@ -26,6 +26,17 @@ Concrete Purpur entry points read at the pinned SHA:
   per-world fallback and configuration migration
 
 
+
+Purpur 26.3 executable reference artifact (independently verified):
+- Official build ID: 2654; API: https://api.purpurmc.org/v2/purpur/26.3/2654
+- Source commit in build metadata: 5cd359666a40bc4a41ce3aa7c755d2ad015ebfb0, matches pinned source
+- Download URL: https://api.purpurmc.org/v2/purpur/26.3/2654/download
+- Exact size: 58,123,798 bytes; upstream MD5: 5cd522f99592a3545913a30e44665de1
+- Locally measured SHA-256: a22d86bb993491a2d4fe77eca77c247541f1720ce19f68c7af0881c443b9878e
+- ZIP integrity: passed, 580 entries; artifact downloaded into disposable directory, then deleted
+- **No server execution or Minecraft EULA assent occurred**. This is build
+  provenance, NOT a Purpur behavior oracle capture; see RV-STATUS-03.
+
 | Reference | Upstream ref | SHA | License |
 | --- | --- | --- | --- |
 | [SteelMC](https://github.com/Steel-Foundation/SteelMC/tree/dc8eaba7ff21c348226a05741c2fb9809a8ca90d) | master | dc8eaba7ff21c348226a05741c2fb9809a8ca90d | AGPL-3.0-or-later |
