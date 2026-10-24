@@ -64,8 +64,36 @@ def trial(creation_order):
         print(f"PASS: creation={creation_order}, loading=a,z, first-owner=A")
 
 
+def empty_permission_manifest_is_rejected():
+    with tempfile.TemporaryDirectory(prefix="ph-empty-permission-") as dirname:
+        root = Path(dirname)
+        native = root / "plugins" / "rust"
+        native.mkdir(parents=True)
+        bad = C_SOURCE.replace("@MARKER@", "A").replace(
+            "collision|example.collision|", "unguarded||"
+        )
+        library = native / "libunguarded.so"
+        built = subprocess.run(
+            ["cc", "-O0", "-shared", "-fPIC", "-x", "c", "-", "-o", str(library)],
+            input=bad, text=True, capture_output=True, timeout=8,
+        )
+        assert built.returncode == 0, built.stderr
+        server = subprocess.run(
+            [str(SERVER), "--bind", "127.0.0.1:0",
+             "--plugins", str(root / "plugins"), "--data", str(root / "data")],
+            input="unguarded\nstop\n", capture_output=True, text=True,
+            cwd=root, timeout=8,
+        )
+        assert server.returncode == 0, (server.stdout, server.stderr)
+        assert "requires a nonempty permission node" in server.stderr, server.stderr
+        assert "Unknown command: unguarded" in server.stderr, server.stderr
+        assert "ORDER_WIN_A" not in server.stdout, server.stdout
+        print("PASS: native empty-permission declaration rejected; command not executable")
+
+
 def main():
     assert SERVER.is_file(), "Build release server first"
+    empty_permission_manifest_is_rejected()
     trial(("z", "a"))
     trial(("a", "z"))
     trial(("z", "a"))

@@ -357,3 +357,14 @@ python3 -B scripts/test_native_plugin_order.py after building the release
 binary. The tool creates two disposable C plugins under temporary paths
 and runs isolated server children; no user plugin directory is changed.
 Native callbacks remain unsandboxed; see the separate security warning.
+
+
+### Permission requirement for native commands
+
+Every registered command must declare a nonempty permission node.
+Native ABI command manifest declarations with a missing permission
+field are rejected before reserving their name or aliases. The legacy
+in-memory permission helper, like the native persistent evaluator,
+does not treat an empty node as an implicit Allow. A future intentionally
+public command feature would need an explicit reviewed policy rather
+than using an empty string as an undocumented bypass.

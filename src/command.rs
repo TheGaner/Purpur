@@ -140,7 +140,9 @@ fn match_node(rule: &str, node: &str) -> Option<usize> {
 impl Permissions for Grants {
     fn allowed(&self, principal: &str, node: &str, context: Option<&str>) -> bool {
         if node.is_empty() {
-            return true;
+            // Match the native permission provider's fail-closed contract.
+            // Public commands need an explicit policy, not an empty node.
+            return false;
         }
         // Most specific matching rule wins. On an equal score explicit deny wins.
         // Direct user rules beat group rules at the same specificity.
@@ -365,6 +367,11 @@ impl Registry {
         // allocate an unbounded node graph on player join.
         if self.commands.len() >= 1024 || spec.aliases.len() > 32 || spec.parameters.len() > 64 {
             return Err(Error::TooLong);
+        }
+        if spec.permission.is_empty() {
+            return Err(Error::InvalidSyntax(
+                "command requires a nonempty permission node".into(),
+            ));
         }
         let name = spec.name.to_ascii_lowercase();
         let aliases: Vec<_> = spec
@@ -752,6 +759,42 @@ mod tests {
             r.execute("echo", &Source::Console, &g, &state()).err(),
             Some(Error::Usage("/echo <text>".into()))
         );
+    }
+    #[test]
+    fn legacy_grants_never_treat_empty_permission_as_public() {
+        let grants = Grants::default();
+        assert!(!grants.allowed("steve", "", None));
+        assert!(!grants.allowed("steve", "horizon.command.missing", None));
+    }
+    #[test]
+    fn registration_rejects_empty_permission_without_mutating_routes() {
+        let mut registry = Registry::default();
+        let unprotected = Command {
+            name: "unguarded".into(),
+            aliases: vec!["u".into()],
+            permission: String::new(),
+            description: "Must not silently be public".into(),
+            parameters: vec![],
+            handler: Handler::Plugin {
+                owner: "test".into(),
+            },
+        };
+        let player = player();
+        let grants = Grants::default();
+        // The old registration path accepted an empty permission and the
+        // legacy provider then granted the command to a zero-grant player.
+        assert!(matches!(
+            registry.register(unprotected),
+            Err(Error::InvalidSyntax(_))
+        ));
+        assert!(registry.visible(&player, &grants).is_empty());
+        assert!(registry.complete("u", &player, &grants).is_empty());
+        assert!(registry.project(&player, &grants).labels().is_empty());
+        assert!(matches!(
+            registry.execute("unguarded", &player, &grants, &state()),
+            Err(Error::Unknown(_))
+        ));
+        assert_eq!(registry.unregister_owner("test"), 0);
     }
     #[test]
     fn permission_denies_fail_closed_and_filters_help() {
