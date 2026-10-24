@@ -175,12 +175,12 @@
         "scripts/experiment_native_process_boundary.py": "d5530452eb66637ae5b314ea35925de2908a363c218d11ffedf12dc202e97eb5",
         "scripts/experiment_wasmtime_core_limits.py": "f3c5473c366d940a27c2269846e5bdd76b137a73d6f1401a25c352c51bcb54a5",
         "scripts/experiment_wasmtime_component_contract.py": "a64c4ffd38b81f1b85b5f680a06f9c455a74c41c150f6138bb597cb54f87ffe5",
-        "scripts/fixtures/server-plugin-probe.wit": "d3bbaefbd714da3bbb92b7cefc8bb197e7ab002e175f589a439500480a54935d",
+        "scripts/fixtures/server-plugin-probe.wit": "9ef9f14f21baddf511ae58ab6cdfcc96bfdb99327427923b62bf73ff9d5b2e6e",
         "scripts/experiment_wasmtime_component_host_limits.py": "7579272fd81857a10e869d54c03727d834fc51d2faeacf12458fa8ff9fa81c5b",
-        "scripts/experiment_wasmtime_host_queue.py": "89f6da75514134cf6b109e1300e11c6676f82de6249481b3ca0c3bb86ddc0298"
+        "scripts/experiment_wasmtime_host_queue.py": "c8f3db07702288f0a761aee1765b634e0976cb8985031f596c6164e99c604fda"
       },
-      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 native process 8/8; RV-PLUG-07 core Wasm 6/6; RV-PLUG-08 typed component 8/8; RV-PLUG-09 store/epoch 4/4; RV-PLUG-10 genuine component bounded submit request 10/10 with event cap 2, FIFO 4, explicit quota/refusal, deferred consumer. Real native .so still unsandboxed and fails callback hang test.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05 through RV-PLUG-10 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon client-only mod runtime with storage budget/output queues, SteelMC admission, official Wasmtime import limits, reviewed typed scalar queue/quota proof; still lacks world ownership, actual player auth, secure host import scheduling, cancellation, WIT generated bindings and licensing."
+      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 native worker 8/8, RV-PLUG-07 core Wasm 6/6, RV-PLUG-08 component 8/8, RV-PLUG-09 store/epoch 4/4; RV-PLUG-10/11 typed host queue now 14 checked scenarios incl red-before submit-then-trap orphan fix, staged commit/abort, preserving unrelated FIFO, reinstantiate invalidated guest after trap. Actual Rust native .so still unsandboxed.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05 through RV-PLUG-11; docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon client mod output-before-failure contrast, first-party stronger fail-closed server effect atomicity decision; no production server host, authentication, thread safety, region ownership, host I/O cancellation or legal gate approval."
     },
     {
       "id": "REV-TICK",

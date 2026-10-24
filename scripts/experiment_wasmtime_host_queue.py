@@ -27,6 +27,7 @@ ADMITTED = 0
 INVALID = 1
 EVENT_LIMIT = 2
 QUEUE_FULL = 3
+EVENT_INACTIVE = 4
 
 WAT = """
 (component
@@ -37,6 +38,11 @@ WAT = """
     (func (export "emit") (param i32) (result i32)
       local.get 0
       call $submit)
+    (func (export "emit-then-trap") (param i32)
+      local.get 0
+      call $submit
+      drop
+      unreachable)
     (func (export "burst-three") (param i32) (result i32)
       local.get 0
       call $submit
@@ -56,35 +62,65 @@ WAT = """
     (canon lift (core func $guest-instance "emit")))
   (func (export "burst-three") (type $export)
     (canon lift (core func $guest-instance "burst-three")))
+  (type $trap-export (func (param "value" u32)))
+  (func (export "emit-then-trap") (type $trap-export)
+    (canon lift (core func $guest-instance "emit-then-trap")))
 )
 """
 
 
 class HostPolicy:
-    """Test-only single-thread admission and separate tick-side effects."""
+    """Test-only single-thread staged admissions; no IO while guest runs."""
 
     def __init__(self):
         self.pending = deque()
+        self.staged = []
         self.processed = []
         self.event_remaining = 0
+        self.event_active = False
 
     def begin_event(self):
+        if self.event_active or self.staged:
+            raise RuntimeError("cannot begin a second event before commit/abort")
+        self.event_active = True
         self.event_remaining = MAX_PER_EVENT
 
+    def commit_event(self):
+        if not self.event_active:
+            raise RuntimeError("cannot commit a closed event")
+        assert len(self.pending) + len(self.staged) <= MAX_PENDING
+        self.pending.extend(self.staged)
+        self.staged.clear()
+        self.event_active = False
+        self.event_remaining = 0
+
+    def abort_event(self):
+        if not self.event_active:
+            raise RuntimeError("cannot abort a closed event")
+        self.staged.clear()
+        self.event_active = False
+        self.event_remaining = 0
+
     def submit(self, _store, value):
+        # The entire event is provisional until commit_event. Successful
+        # admission does NOT authorize applying any side effect yet.
+        if not self.event_active:
+            return EVENT_INACTIVE
         # Placeholder policy: numeric IDs 1..10 are test-authorized. This
         # is NOT permission evaluation, identity validation or a player API.
         if not 1 <= value <= 10:
             return INVALID
         if self.event_remaining <= 0:
             return EVENT_LIMIT
-        if len(self.pending) >= MAX_PENDING:
+        if len(self.pending) + len(self.staged) >= MAX_PENDING:
             return QUEUE_FULL
-        self.pending.append(value)
+        self.staged.append(value)
         self.event_remaining -= 1
         return ADMITTED
 
     def drain(self, slow=False):
+        if self.event_active:
+            raise RuntimeError("cannot apply effects while a guest event runs")
         completed = []
         for _ in range(min(MAX_DRAIN_PER_TICK, len(self.pending))):
             item = self.pending.popleft()
@@ -124,26 +160,38 @@ def main():
     assert emit is not None and burst is not None
     print("PASS: actual typed Component Model import/export instantiated without WASI")
 
+    assert emit(store, 1) == EVENT_INACTIVE
+    assert not policy.pending and not policy.staged
+    print("PASS: calls outside an active guest event are rejected")
+
     policy.begin_event()
     assert emit(store, 1) == ADMITTED
     assert emit(store, 0) == INVALID
-    assert list(policy.pending) == [1] and policy.event_remaining == 1
+    assert list(policy.staged) == [1] and not policy.pending
+    assert policy.event_remaining == 1
     print("PASS: invalid placeholder request rejected without enqueue or budget loss")
     assert emit(store, 2) == ADMITTED
     assert emit(store, 3) == EVENT_LIMIT
-    assert list(policy.pending) == [1, 2] and policy.event_remaining == 0
-    print("PASS: two-request event budget prevents third admission")
+    assert list(policy.staged) == [1, 2] and policy.event_remaining == 0
+    assert not policy.pending
+    policy.commit_event()
+    assert list(policy.pending) == [1, 2]
+    print("PASS: two-request event budget and success-only event commit")
 
     policy.begin_event()
     assert emit(store, 3) == ADMITTED
     assert emit(store, 4) == ADMITTED
+    assert list(policy.staged) == [3, 4]
+    assert list(policy.pending) == [1, 2]
+    policy.commit_event()
     assert list(policy.pending) == [1, 2, 3, 4]
-    print("PASS: accepted requests reach host-owned FIFO capacity four")
+    print("PASS: accepted and committed requests reach FIFO capacity four")
 
     policy.begin_event()
     assert emit(store, 5) == QUEUE_FULL
     assert policy.event_remaining == MAX_PER_EVENT
-    assert list(policy.pending) == [1, 2, 3, 4]
+    assert list(policy.pending) == [1, 2, 3, 4] and not policy.staged
+    policy.commit_event()
     print("PASS: saturated global FIFO refuses new request transactionally")
 
     assert policy.drain() == [1, 2]
@@ -151,9 +199,13 @@ def main():
     assert policy.processed == [1, 2]
     print("PASS: consumer drains at most two requests, preserving FIFO backlog")
 
+    policy.begin_event()
     assert emit(store, 5) == ADMITTED
     assert emit(store, 6) == ADMITTED
     assert emit(store, 7) == EVENT_LIMIT
+    assert list(policy.staged) == [5, 6]
+    assert list(policy.pending) == [3, 4]
+    policy.commit_event()
     assert list(policy.pending) == [3, 4, 5, 6]
     assert policy.drain() == [3, 4]
     assert policy.drain() == [5, 6]
@@ -164,8 +216,10 @@ def main():
     started = time.monotonic()
     assert burst(store, 7) == EVENT_LIMIT
     elapsed = time.monotonic() - started
-    assert list(policy.pending) == [7, 7]
+    assert list(policy.staged) == [7, 7] and not policy.pending
     assert len(policy.processed) == 6  # no side effect in guest callback
+    policy.commit_event()
+    assert list(policy.pending) == [7, 7]
     drained = policy.drain(slow=True)
     assert drained == [7, 7] and len(policy.processed) == 8
     print(f"PASS: burst callback admitted two with no applied side effects; "
@@ -174,10 +228,71 @@ def main():
 
     policy.begin_event()
     assert emit(store, 4294967295) == INVALID
-    assert not policy.pending and policy.event_remaining == MAX_PER_EVENT
+    assert not policy.pending and not policy.staged
+    assert policy.event_remaining == MAX_PER_EVENT
+    policy.commit_event()
     print("PASS: arbitrary guest-supplied u32 cannot bypass placeholder host policy")
-    print("RESULT: review-only bounded admission, explicit rejection and staged "
-          "FIFO verified. NOT an authenticated/owner-affine safe plugin API, "
+
+    # Regression: a guest may submit an effect then trap. No host event
+    # that failed should leak effects into the executable queue.
+    policy.begin_event()
+    fault = instance.get_func(store, "emit-then-trap")
+    assert fault is not None
+    try:
+        fault(store, 7)
+    except (wasmtime.WasmtimeError, wasmtime.Trap):
+        pass
+    else:
+        raise AssertionError("expected guest unreachable trap")
+    assert not policy.pending and list(policy.staged) == [7]
+    policy.abort_event()
+    assert not policy.pending and not policy.staged
+    print("PASS: failed guest event's accepted requests discarded at abort")
+
+    # A Component Model instance is invalid after trapping. Re-instantiate
+    # with a new Store before simulating the next independent guest event.
+    store = wasmtime.Store(engine)
+    store.set_fuel(100000)
+    instance = linker.instantiate(store, guest)
+    emit = instance.get_func(store, "emit")
+    fault = instance.get_func(store, "emit-then-trap")
+    assert emit is not None and fault is not None
+
+    # Previously committed effects survive a distinct failing callback;
+    # clearing the global queue on fault would lose unrelated valid work.
+    policy.begin_event()
+    assert emit(store, 9) == ADMITTED
+    policy.commit_event()
+    assert list(policy.pending) == [9]
+    policy.begin_event()
+    try:
+        fault(store, 7)
+    except (wasmtime.WasmtimeError, wasmtime.Trap):
+        pass
+    else:
+        raise AssertionError("expected guest trap with prior backlog")
+    assert list(policy.staged) == [7] and list(policy.pending) == [9]
+    policy.abort_event()
+    assert list(policy.pending) == [9] and not policy.staged
+    assert policy.drain() == [9]
+    print("PASS: abort preserves previously committed global FIFO items")
+
+    # A second trapped instance is also unusable; explicitly create a
+    # fresh Store and guest rather than re-entering the faulted component.
+    store = wasmtime.Store(engine)
+    store.set_fuel(100000)
+    instance = linker.instantiate(store, guest)
+    emit = instance.get_func(store, "emit")
+    assert emit is not None
+    # Only the host-owned mock policy and isolated fixture recover here.
+    policy.begin_event()
+    assert emit(store, 8) == ADMITTED
+    policy.commit_event()
+    assert policy.drain() == [8]
+    assert not policy.pending and not policy.staged
+    print("PASS: fresh host event recovers capacity without stale requests")
+    print("RESULT: review-only bounded admission, commit/abort, explicit "
+          "rejection and FIFO verified. NOT an authenticated/owner-affine API, "
           "concurrency/timeout isolation, or actual Rust server integration.")
 
 
