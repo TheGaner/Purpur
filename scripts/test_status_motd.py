@@ -6,11 +6,14 @@ Run after cargo +1.90.0 build --release. Only uses localhost and
 temporary directories. Tests invalid configuration without opening TCP.
 """
 import json
+import os
 from pathlib import Path
 import re
+import select
 import socket
 import subprocess
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "target/release/purpur-horizon"
@@ -92,10 +95,30 @@ def main():
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 text=True, bufsize=1)
             try:
-                opening = child.stdout.readline()
-                port = re.search(r"127\.0\.0\.1:(\d+)", opening)
-                assert port, (opening, child.poll())
-                status = status_reply(int(port.group(1)))
+                # Startup may emit plugin and native-store lines before
+                # readiness. Use raw nonbuffered reads and an absolute
+                # deadline rather than assume stdout's first line is ready.
+                deadline = time.monotonic() + 5
+                emitted = bytearray()
+                port = None
+                while time.monotonic() < deadline:
+                    wait = deadline - time.monotonic()
+                    readable, _, _ = select.select(
+                        [child.stdout.fileno()], [], [], max(0, wait))
+                    if not readable:
+                        break
+                    chunk = os.read(child.stdout.fileno(), 4096)
+                    assert chunk, (bytes(emitted), child.poll())
+                    emitted.extend(chunk)
+                    found = re.search(
+                        rb"Purpur-Horizon standalone server at 127\.0\.0\.1:(\d+) \(MC 26\.3 protocol 777\)\n",
+                        emitted)
+                    if found:
+                        port = int(found.group(1))
+                        break
+                    assert child.poll() is None, (bytes(emitted), child.poll())
+                assert port is not None, (bytes(emitted), child.poll())
+                status = status_reply(port)
                 assert status["description"]["text"] == motd
                 assert status["version"]["protocol"] == 777
             finally:

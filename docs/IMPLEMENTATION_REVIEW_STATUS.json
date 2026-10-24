@@ -23,11 +23,11 @@
       "current_sha256": {
         "src/network.rs": "3f35222d28acfe950cfd1f49ba9c824fa1e94dba9a5eac76988e6345b767030f",
         "src/protocol.rs": "31acce580f5e8e58341eb42fae96d136c13d05de4a17e68cf9b03543d1fea628",
-        "scripts/test_peer_admission.py": "b2eba263130356065764127a95784b2078e736859f22fe3b35d660d7e61bc5d5",
-        "scripts/bench_admission.py": "efac714884548751b4b6bd11240e46d025ca3c408958d8bb0c744174239ea5c7"
+        "scripts/test_peer_admission.py": "6c0e92a8296165ce240280c324bcaa395ef7076d9795a0e5863877443092076d",
+        "scripts/bench_admission.py": "b3829a0eff563b2cc1d33e0c16276aba59e7026147df7549d8b7949e945507f5"
       },
-      "test_evidence_partial": "89 Rust tests; RV-STATUS-02/RV-NET-06 configuration preflight and bounded JSON real TCP fixture, plus RV-NET-04/05 per-IP fairness evidence. Real WAN, auth and rate quotas pending.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-04 and RV-NET-05 pinned source comparisons, controlled benchmark methods, results and limitations"
+      "test_evidence_partial": "92 Rust tests; RV-NET-01..06 timed TCP transport, per-IP cap and fairness; RV-NET-07 verified ready banner delayed until plugin setup/accept worker, peer TCP quota fixture and two-trial benchmark adapted to complete deadline-bounded banner with 24/24 distinct-source successes per trial; status-only protocol 777, not DDoS proof.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-12/RV-NET-07: pinned Horizon plugin load and server startup readiness difference, no JVM/client side code transplant; bounded readiness parser and real TCP result. Wider transport review remains in_review."
     },
     {
       "id": "REV-STATUS",
@@ -43,12 +43,12 @@
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
-      "test_evidence_partial": "89 Rust tests; RV-STATUS-02 failing-before 32768-byte MOTD generated JSON outside Horizon Str(32767); 4096-byte ASCII/escaped control/UTF-8 unit and real TCP fixture, 4097-byte pre-bind startup rejection. Full status parity review pending.",
+      "test_evidence_partial": "92 Rust tests; RV-STATUS-02 capped MOTD/JSON real TCP; RV-PLUG-12 startup status fixture waits for complete ready banner and verifies live protocol-777 status replies. Broader review not approved.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STATUS-02/RV-NET-06 pinned Horizon Str decoder, FerrumC writer, conservative byte-size cap, alternatives and verified boundaries.",
       "current_sha256": {
-        "src/main.rs": "7139ecd002e924778060805b69be2cf1d4b298c8624b79256e7996a7c0c6ceed",
+        "src/main.rs": "c88e03b5acc1260b00b3a5a2ef52b881b4711402f128d23bc7fe13c3f21983c9",
         "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5",
-        "scripts/test_status_motd.py": "4669ed3794d7f656953ecc7f70b3cfb5aade7b0cc06b03d3f1aba97323073ea7"
+        "scripts/test_status_motd.py": "ba22444ab56c423bb915ef473faf3094d06be38e02b536e08f3bfa6707f534a7"
       }
     },
     {
@@ -134,9 +134,9 @@
         "src/builtin/permissions.rs": "3de228567cb007970f39b8828f97f99ec5faea8cccf1197501be29095d10c338",
         "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658",
         "scripts/test_single_writer.py": "0f1dd52e68dcdc1c2a3c203e9210848ff881769050ea1ba458e08a79d6dd7c05",
-        "scripts/test_startup_preflight.py": "ea980fad35677e0881f445e287988b3544e80f7ced89105e2f7400c2fae35058"
+        "scripts/test_startup_preflight.py": "39812f4293fe7c373afa045ecaf6e2b0ad9ead748d31fd8ae552258ef7567dab"
       },
-      "test_evidence_partial": "92 Rust tests; RV-STORAGE-03 isolated real two-server shared-data directory reproduced plugin onEnable/listener ready before lock failure, fixed by opening both stores before binding/loading; corrupt utilities.json now rejects before plugin side effects; prior clean/crash and legacy migration tests still pass.",
+      "test_evidence_partial": "92 Rust tests; RV-STORAGE-03 two-writer JSON fail-closed startup; RV-PLUG-12 finite C enable marker precedes ready banner. Real clean/unclean persistence and import tests. Review in progress.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STORAGE-03/RV-PLUG-04 LuckPerms storage init and Horizon Wasmtime plugin lifecycle comparison, before/after startup sequencing."
     },
     {
@@ -170,7 +170,7 @@
         "src/plugins.rs": "1cd4b7c2a168e47f49b8f804047b999fe0cc849a56cde49fc65b3903fa979123",
         "java/HorizonJavaBridge.java": "5e4f8d733058d77679cc9ffd621f032523fdca5655104cdc5347886599a97276",
         "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b",
-        "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59",
+        "scripts/test_native_plugin_nontermination.py": "f2dcb68363717847767953fd8ae187b2a79618fb74adee1b9eb8c934c9b86766",
         "scripts/test_native_plugin_order.py": "bef42bab89ce2ac56b5097fdee0b30f306c30357d071e385728ef7448ec4fc12",
         "scripts/experiment_native_process_boundary.py": "d5530452eb66637ae5b314ea35925de2908a363c218d11ffedf12dc202e97eb5",
         "scripts/experiment_wasmtime_core_limits.py": "f3c5473c366d940a27c2269846e5bdd76b137a73d6f1401a25c352c51bcb54a5",
@@ -179,7 +179,7 @@
         "scripts/experiment_wasmtime_component_host_limits.py": "7579272fd81857a10e869d54c03727d834fc51d2faeacf12458fa8ff9fa81c5b",
         "scripts/experiment_wasmtime_host_queue.py": "c8f3db07702288f0a761aee1765b634e0976cb8985031f596c6164e99c604fda"
       },
-      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 native worker 8/8, RV-PLUG-07 core Wasm 6/6, RV-PLUG-08 component 8/8, RV-PLUG-09 store/epoch 4/4; RV-PLUG-10/11 typed host queue now 14 checked scenarios incl red-before submit-then-trap orphan fix, staged commit/abort, preserving unrelated FIFO, reinstantiate invalidated guest after trap. Actual Rust native .so still unsandboxed.",
+      "test_evidence_partial": "92 Rust tests; RV-PLUG-12 native .so hanging enable previously advertised readiness before accept spawn, now no banner; healthy callback marker precedes readiness. RV-PLUG-02 actual in-process native callback remains nonterminating; no Wasmtime sandbox integrated.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05 through RV-PLUG-11; docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon client mod output-before-failure contrast, first-party stronger fail-closed server effect atomicity decision; no production server host, authentication, thread safety, region ownership, host I/O cancellation or legal gate approval."
     },
     {
@@ -197,10 +197,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/main.rs": "7139ecd002e924778060805b69be2cf1d4b298c8624b79256e7996a7c0c6ceed",
+        "src/main.rs": "c88e03b5acc1260b00b3a5a2ef52b881b4711402f128d23bc7fe13c3f21983c9",
         "scripts/test_console_ingress.py": "3e57e02adacdad25664ff83c4529231b32a50dbe0b20782753d6293ad7e029f7"
       },
-      "test_evidence_partial": "92 Rust tests; RV-TICK-02 demonstrated 65KiB stdin read_line allocation before fix, now bounds complete line at 4096 original content bytes with CRLF, rejects and drains 300KiB stop prefix, preserves following version/stop via real release-server fixture; queue/tick budgets still cooperative.",
+      "test_evidence_partial": "92 Rust tests; RV-TICK-01 bounded command budget and RV-TICK-02 input scanner; RV-PLUG-12 readiness banner moved after startup/accept thread; no change to tick semantics. Full review not approved.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-TICK-02/RV-CMD-04 pre/post reference review of SteelMC bounded command queues versus stdin pre-trim allocation and whole-line reject policy."
     },
     {

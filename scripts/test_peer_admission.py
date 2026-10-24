@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Real TCP preauth fairness regression: one source cannot exhaust all worker slots."""
 import json
+import os
+import select
 import re
 import socket
 import subprocess
@@ -65,6 +67,34 @@ def get_status(address, source=None):
     return (time.perf_counter_ns() - started) / 1_000_000
 
 
+def await_status_ready(server, timeout=5):
+    """Read a complete ready banner even after preceding plugin log lines.
+
+    Raw reads avoid TextIOWrapper buffering and a full-line regexp avoids
+    accepting a partial port from a fragmented pipe write. Finite deadline
+    prevents a hung startup from hanging the test process indefinitely.
+    """
+    deadline = time.monotonic() + timeout
+    output = bytearray()
+    while time.monotonic() < deadline:
+        readable, _, _ = select.select(
+            [server.stdout.fileno()], [], [],
+            max(0, deadline - time.monotonic()))
+        if not readable:
+            break
+        chunk = os.read(server.stdout.fileno(), 4096)
+        assert chunk, (bytes(output), server.poll())
+        output.extend(chunk)
+        match = re.search(
+            rb"Purpur-Horizon standalone server at 127\.0\.0\.1:(\d+) \(MC 26\.3 protocol 777\)\n",
+            output,
+        )
+        if match:
+            return "127.0.0.1", int(match.group(1))
+        assert server.poll() is None, (bytes(output), server.poll())
+    raise AssertionError(f"status-ready banner absent: {bytes(output)!r}")
+
+
 def main():
     assert BINARY.is_file(), "Build the release server first"
     with tempfile.TemporaryDirectory(prefix="ph-peer-") as tmp:
@@ -85,10 +115,7 @@ def main():
                                   text=True, bufsize=1)
         held = None
         try:
-            line = server.stdout.readline()
-            match = re.search(r"127\.0\.0\.1:(\d+)", line)
-            assert match, (line, server.poll())
-            address = ("127.0.0.1", int(match.group(1)))
+            address = await_status_ready(server)
             held = socket.create_connection(address, timeout=2)
             time.sleep(.15)  # ensure first connection occupies the single peer slot
             refused = socket.create_connection(address, timeout=2)

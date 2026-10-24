@@ -94,6 +94,12 @@ Homes and warps currently store and report coordinates; teleport is blocked unti
 
 ## Network admission and measured status performance
 
+The startup address banner is emitted only after native plugin enable callbacks
+and creation of the TCP accept thread. A nonreturning trusted native callback
+can still hang the server **before** readiness; this fix avoids a misleading
+ready banner but is not a timeout, sandbox, or proof that the asynchronous
+Java bridge has finished initialization. Gameplay login remains unavailable.
+
 Network acceptance is independent of the 20Hz game loop. Active handshakes are bounded by --max-connections N (default 64), and each preauth packet family is limited before payload allocation. The protocol 777 login hello is parsed, but the server still explicitly rejects all player admission: there is no authentication or playable world.
 
 Run python3 scripts/bench_status.py target/release/purpur-horizon to measure localhost server-list status requests. Sequential median RTT improved from roughly 50ms to roughly 0.12ms in the recorded test, not a TPS benchmark. See docs/NETWORK_OPTIMIZATION_2026-10-23.md for methods, p95/p99, restrictions and remaining priorities.

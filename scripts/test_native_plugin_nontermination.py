@@ -47,6 +47,8 @@ def main():
             capture_output=True, timeout=5)
         assert healthy.returncode == 0, (
             healthy.returncode, healthy.stdout, healthy.stderr)
+        assert "Purpur-Horizon standalone server at" in healthy.stdout, (
+            healthy.stdout, healthy.stderr)
 
         library = native / "libnever_return.so"
         build = subprocess.run(
@@ -72,6 +74,8 @@ def main():
                 child.kill()
                 out, err = child.communicate(timeout=4)
             assert "RVPLUG_STUCK_ENABLE_REACHED" in out, (out, err)
+            assert "Purpur-Horizon standalone server at" not in out, (
+                "native plugin enable blocked before accept-loop readiness", out, err)
             assert child.returncode != 0, child.returncode
         finally:
             if child.poll() is None:

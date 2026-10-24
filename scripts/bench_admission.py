@@ -11,14 +11,13 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import math
 from pathlib import Path
-import re
 import socket
 import statistics
 import subprocess
 import tempfile
 import time
 
-from test_peer_admission import BINARY, get_status
+from test_peer_admission import BINARY, await_status_ready, get_status
 
 
 def quantiles(samples):
@@ -108,10 +107,7 @@ def main():
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE, text=True, bufsize=1)
         try:
-            opening = server.stdout.readline()
-            match = re.search(r"127\.0\.0\.1:(\d+)", opening)
-            assert match, (opening, server.poll())
-            address = ("127.0.0.1", int(match.group(1)))
+            address = await_status_ready(server)
             trials = [trial(address) for _ in range(2)]
             print(json.dumps({
                 "experiment": "RV-NET-05 local preauth fairness, no gameplay",

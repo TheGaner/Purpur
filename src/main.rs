@@ -152,12 +152,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         builtin::permissions::NativePermissions::open(data_dir.join("permissions.json"))?;
     let mut utilities = builtin::utilities::NativeUtilities::open(data_dir.join("utilities.json"))?;
     let listener = TcpListener::bind(&bind)?;
-    println!(
-        "Purpur-Horizon standalone server at {} (MC 26.3 protocol {})",
-        listener.local_addr()?,
-        protocol::VERSION
-    );
-    println!("WARNING: gameplay login and Purpur parity NOT implemented");
+    // Binding reserves a port, but does NOT mean native enable callbacks
+    // have completed or an accept worker is serving status requests.
+    let listener_addr = listener.local_addr()?;
     // Status players=0 and MOTD cannot change while the prototype is running.
     // Preframe once, then share immutable bytes among concurrent connections.
     // Dynamic player counts will later use a versioned, refreshed snapshot.
@@ -230,6 +227,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         })?;
+    // Announce the status-ready address only after plugin enable callbacks,
+    // command registration, console setup and successful accept-thread spawn.
+    // This is NOT a claim of Java/Paper plugin or playable-world readiness.
+    println!(
+        "Purpur-Horizon standalone server at {} (MC 26.3 protocol {})",
+        listener_addr,
+        protocol::VERSION
+    );
+    println!("WARNING: gameplay login and Purpur parity NOT implemented");
     let mut next = Instant::now();
     let mut tick = 0u64;
     loop {

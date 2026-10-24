@@ -68,6 +68,8 @@ def main():
                 else:
                     raise AssertionError("first server did not finish startup")
                 assert "RV_BOOT_PLUGIN_ENABLED" in content, content
+                # A bound TCP port is NOT a ready server. A finite native
+                # enable callback must finish before the address banner.
 
                 loser = subprocess.run(
                     args, input="stop\n", text=True, capture_output=True,
@@ -86,6 +88,10 @@ def main():
                         owner.kill()
                         owner.communicate(timeout=4)
                 assert owner.returncode == 0, (root / "owner.log").read_text()
+                completed = (root / "owner.log").read_text()
+                assert "Purpur-Horizon standalone server at" in completed
+                assert completed.index("RV_BOOT_PLUGIN_ENABLED") < completed.index(
+                    "Purpur-Horizon standalone server at"), completed
 
         corrupt = root / "invalid-data"
         corrupt.mkdir()
