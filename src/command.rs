@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 pub mod tree;
 use std::time::Duration;
-const MAX_LINE: usize = 4096;
+pub(crate) const MAX_LINE: usize = 4096;
 const MAX_TOKENS: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

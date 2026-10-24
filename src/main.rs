@@ -19,7 +19,7 @@ const MAX_CONSOLE_TIME_PER_TICK: Duration = Duration::from_millis(10);
 
 use std::{
     env,
-    io::{self, Write},
+    io::{self, BufRead, Write},
     net::{TcpListener, TcpStream},
     path::PathBuf,
     sync::{mpsc, Arc},
@@ -49,6 +49,62 @@ where
         }
     }
     true
+}
+/// Read bounded console input without retaining an oversized line. Always
+/// consume the entire rejected line so its tail cannot become a new command.
+#[derive(Debug, PartialEq, Eq)]
+enum ConsoleLine {
+    Eof,
+    Command(String),
+    TooLong,
+}
+fn read_console_line(reader: &mut impl BufRead) -> io::Result<ConsoleLine> {
+    let mut bytes = Vec::with_capacity(128);
+    let mut too_long = false;
+    let mut received_any = false;
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            break;
+        }
+        let count = available
+            .iter()
+            .position(|b| *b == b'\n')
+            .map_or(available.len(), |index| index + 1);
+        let complete = available[count - 1] == b'\n';
+        received_any = true;
+        if !too_long {
+            // A valid MAX_LINE-byte command may end with CRLF. More input
+            // is consumed but NEVER appended after hitting this cap.
+            if count > (command::MAX_LINE + 2).saturating_sub(bytes.len()) {
+                too_long = true;
+            } else {
+                bytes.extend_from_slice(&available[..count]);
+            }
+        }
+        reader.consume(count);
+        if complete {
+            break;
+        }
+    }
+    if !received_any {
+        return Ok(ConsoleLine::Eof);
+    }
+    if too_long {
+        return Ok(ConsoleLine::TooLong);
+    }
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+    }
+    if bytes.last() == Some(&b'\r') {
+        bytes.pop();
+    }
+    if bytes.len() > command::MAX_LINE {
+        return Ok(ConsoleLine::TooLong);
+    }
+    let line = String::from_utf8(bytes)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid console UTF-8"))?;
+    Ok(ConsoleLine::Command(line.trim().to_owned()))
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bind = String::from("127.0.0.1:25565");
@@ -115,14 +171,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let started = Instant::now();
     let (tx, rx) = mpsc::sync_channel(MAX_CONSOLE_COMMANDS_QUEUED);
     thread::spawn(move || {
-        let mut s = String::new();
+        let stdin = io::stdin();
+        let mut input = io::BufReader::new(stdin.lock());
         loop {
-            s.clear();
-            if io::stdin().read_line(&mut s).unwrap_or(0) == 0 {
-                break;
-            }
-            if tx.send(s.trim().to_string()).is_err() {
-                break;
+            match read_console_line(&mut input) {
+                Ok(ConsoleLine::Eof) => break,
+                Ok(ConsoleLine::TooLong) => {
+                    eprintln!(
+                        "[console] command exceeds {} UTF-8 bytes; ignored",
+                        command::MAX_LINE
+                    );
+                }
+                Ok(ConsoleLine::Command(line)) => {
+                    if tx.send(line).is_err() {
+                        break;
+                    }
+                }
+                Err(error) => {
+                    eprintln!("[console] input read failed: {error}");
+                    break;
+                }
             }
         }
     });
@@ -406,6 +474,54 @@ mod tests {
         ));
         assert_eq!(handled, vec!["first", "stop"]);
         assert_eq!(receiver.try_recv().unwrap(), "remaining");
+    }
+    #[test]
+    fn bounded_console_reader_never_buffers_unbounded_line() {
+        let incoming = format!("{}stop\nversion\n", "x".repeat(65_536));
+        let mut reader = io::BufReader::with_capacity(7, incoming.as_bytes());
+        assert_eq!(
+            read_console_line(&mut reader).unwrap(),
+            ConsoleLine::TooLong
+        );
+        assert_eq!(
+            read_console_line(&mut reader).unwrap(),
+            ConsoleLine::Command("version".into())
+        );
+        assert_eq!(read_console_line(&mut reader).unwrap(), ConsoleLine::Eof);
+    }
+    #[test]
+    fn console_reader_preserves_exact_boundaries_unicode_crlf_and_eof() {
+        let full = "x".repeat(command::MAX_LINE);
+        let over = "y".repeat(command::MAX_LINE + 1);
+        let unicode = "é".repeat(command::MAX_LINE / 2);
+        let input = format!("{full}\n{over}\r\n{unicode}\r\nstop");
+        let mut reader = io::BufReader::with_capacity(9, input.as_bytes());
+        assert_eq!(
+            read_console_line(&mut reader).unwrap(),
+            ConsoleLine::Command(full)
+        );
+        assert_eq!(
+            read_console_line(&mut reader).unwrap(),
+            ConsoleLine::TooLong
+        );
+        assert_eq!(
+            read_console_line(&mut reader).unwrap(),
+            ConsoleLine::Command(unicode)
+        );
+        assert_eq!(
+            read_console_line(&mut reader).unwrap(),
+            ConsoleLine::Command("stop".into())
+        );
+        assert_eq!(read_console_line(&mut reader).unwrap(), ConsoleLine::Eof);
+    }
+    #[test]
+    fn console_reader_refuses_invalid_utf8_without_replacement() {
+        let mut reader = io::BufReader::new(&[255u8, b'\n'][..]);
+        assert_eq!(
+            read_console_line(&mut reader).unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(read_console_line(&mut reader).unwrap(), ConsoleLine::Eof);
     }
     #[test]
     fn bounded_console_queue_rejects_excess_without_growth() {

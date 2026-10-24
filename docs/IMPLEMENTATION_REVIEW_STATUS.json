@@ -46,7 +46,7 @@
       "test_evidence_partial": "89 Rust tests; RV-STATUS-02 failing-before 32768-byte MOTD generated JSON outside Horizon Str(32767); 4096-byte ASCII/escaped control/UTF-8 unit and real TCP fixture, 4097-byte pre-bind startup rejection. Full status parity review pending.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STATUS-02/RV-NET-06 pinned Horizon Str decoder, FerrumC writer, conservative byte-size cap, alternatives and verified boundaries.",
       "current_sha256": {
-        "src/main.rs": "77529685ed15fb9b5dfd066bf7dc17133d27b8c35e1df9503cb0329c8fe66089",
+        "src/main.rs": "a95d2b7a6364c852080b96152aaba6569b82e855fd9e4f449694be3a235c11e4",
         "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5",
         "scripts/test_status_motd.py": "4669ed3794d7f656953ecc7f70b3cfb5aade7b0cc06b03d3f1aba97323073ea7"
       }
@@ -67,10 +67,10 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/command.rs": "0ca5b31704c97537108373abbe522f29e50194b9c655405b3f6b2a287c239d95",
+        "src/command.rs": "f05a6f0234d2ac6ceccb2a78a25b29477f9c6af79b6cd321e6d2484fcb7b640b",
         "src/command/tree.rs": "5d5bf67508281b1960c617b16f48fae88c2df4a81c29bfb4383276f9c440f551"
       },
-      "test_evidence_partial": "87 Rust tests; RV-CMD-03 two failing-before empty permission regressions now pass: legacy default deny, atomic rejection before routes/tree/suggestions/execute; real release C ABI plugin manifest unguarded|| rejected; no actual authenticated gameplay.",
+      "test_evidence_partial": "92 Rust tests; RV-CMD-04 shared MAX_LINE and entire oversized console line rejection before trimming; real 300KiB stop-prefixed stdin rejected, next version and stop executed; prior command registration and empty permission regressions still pass.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-CMD-03 pinned LuckPerms and SteelMC source comparisons and transactional fail-closed empty permission policy."
     },
     {
@@ -172,7 +172,8 @@
       "id": "REV-TICK",
       "status": "in_review",
       "paths": [
-        "src/main.rs"
+        "src/main.rs",
+        "scripts/test_console_ingress.py"
       ],
       "references": [
         "Folia",
@@ -182,10 +183,11 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/main.rs": "77529685ed15fb9b5dfd066bf7dc17133d27b8c35e1df9503cb0329c8fe66089"
+        "src/main.rs": "a95d2b7a6364c852080b96152aaba6569b82e855fd9e4f449694be3a235c11e4",
+        "scripts/test_console_ingress.py": "3e57e02adacdad25664ff83c4529231b32a50dbe0b20782753d6293ad7e029f7"
       },
-      "test_evidence_partial": "74 Rust tests; 17ms slow callback reproducer failed on old count-only queue, passes with cooperative 10ms cutoff; stop and zero-budget FIFO tests; release and integration smokes. Actual simulation TPS unverified.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-TICK-01 SteelMC/Paper/Folia source comparison, decisions and validation"
+      "test_evidence_partial": "92 Rust tests; RV-TICK-02 demonstrated 65KiB stdin read_line allocation before fix, now bounds complete line at 4096 original content bytes with CRLF, rejects and drains 300KiB stop prefix, preserves following version/stop via real release-server fixture; queue/tick budgets still cooperative.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-TICK-02/RV-CMD-04 pre/post reference review of SteelMC bounded command queues versus stdin pre-trim allocation and whole-line reject policy."
     },
     {
       "id": "REV-LEGAL",

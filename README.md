@@ -380,3 +380,16 @@ rather than silently truncated or sent as responses clients cannot decode.
 Valid multibyte strings and JSON-escaped control characters are preserved.
 Run python3 -B scripts/test_status_motd.py after building the release server
 to check the error path and the real TCP status response boundaries.
+
+
+### Console stdin command framing
+
+The console input thread discards any entire input line whose original
+UTF-8 content exceeds 4096 bytes, before whitespace/slash trimming or
+command execution. It never queues a truncated command prefix, and
+continues with the following line. Valid short lines, CRLF, Unicode
+UTF-8 and EOF without a trailing newline are supported. This reduces
+temporary input allocation independently of the 1024-command queue and
+the registry's separate input-length check. After building release,
+python3 -B scripts/test_console_ingress.py verifies a 300KiB invalid
+line beginning with stop cannot shut down the server early.
