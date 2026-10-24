@@ -168,7 +168,7 @@
         "scripts/test_native_plugin_order.py": "bef42bab89ce2ac56b5097fdee0b30f306c30357d071e385728ef7448ec4fc12"
       },
       "test_evidence_partial": "92 Rust tests; RV-PLUG-04 native enable C marker moved after complete JSON store preflight (two-writer/corrupt data); RV-PLUG-02 nonreturning native callbacks still NOT isolated; Java normal/hung lifecycle and native command ordering regressions.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-02 native execution risks and RV-PLUG-03 pinned Horizon sorted mod discovery, SteelMC registration comparison, before/after ordering evidence and tradeoffs."
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Wasmtime runtime rejects Side::Server; official Wasmtime fuel/epoch/host import caveats; provisional new server WIT sandbox vs native child isolation, explicit unimplemented acceptance matrix."
     },
     {
       "id": "REV-TICK",

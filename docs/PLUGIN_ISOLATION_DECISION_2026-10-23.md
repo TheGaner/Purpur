@@ -1,0 +1,64 @@
+# Plugin isolation — provisional architecture decision (2026-10-23)
+
+**Research and requirements only. NO new sandbox or runtime is implemented; Phase -1 remains active.** This supports master task RV-PLUG in [ROADMAP.md](ROADMAP.md), with source comparison in [IMPLEMENTATION_REFERENCE_AUDIT.md](IMPLEMENTATION_REFERENCE_AUDIT.md).
+
+## What exists and what fails
+
+The current native Rust plugin host (src/native.rs and src/plugins.rs) invokes shared-library C ABI entry points synchronously inside the server address space, with complete process privileges. The host-owned v2 command manifest fixed an unbounded raw pointer scan but **does not** isolate a malicious plugin, prevent memory corruption, or stop an infinite loop. The repeatable real-server script scripts/test_native_plugin_nontermination.py confirms that a native callback can prevent shutdown until its disposable host process is forcibly killed. This is a local trusted-plugin exposure, not a demonstrated remote exploit.
+
+The Java bridge lives in another process with a bounded child shutdown but lacks Bukkit/Paper APIs and cannot protect against native C ABI callbacks. Startup now validates and locks both JSON stores before plugin enable events (fix 533ee3b), preventing the losing second server from running startup effects; that does not isolate callbacks after a healthy boot.
+
+## Pinned primary comparator and official mechanisms
+
+- Horizon source commit e325fa65878071d5c9076e908e9a4adb258b3313, crates/horizon-mods/src/runtime.rs: Wasmtime component model, Config::consume_fuel(true), init/tick/event fuel (2,000,000,000 / 50,000,000 / 100,000,000), guest linear memory cap 64 MiB, instance cap 16, imported capability checks, storage/host-output quotas, failed status on traps. These are **client runtime examples**, not measured server limits.
+- **Crucial gap:** the pinned Horizon runtime explicitly rejects manifest Side::Server with "server mods do not run yet". It cannot be transplanted directly as a working server plugin host or used as evidence of working server mods.
+- Wasmtime official security design: https://docs.wasmtime.dev/security.html — guest WebAssembly address space and OS capabilities are mediated by explicitly linked imports. Exposing unsafe host functions can still compromise the host.
+- Wasmtime official interruption explanation: https://docs.wasmtime.dev/examples-interrupting-wasm.html — deterministic fuel budgets versus less deterministic, lower-overhead epoch interrupts.
+- Wasmtime Store/Config APIs: https://docs.wasmtime.dev/api/wasmtime/struct.Store.html and https://docs.wasmtime.dev/api/wasmtime/struct.Config.html — separately configured resource limits and epoch deadlines. Guest fuel does NOT bound synchronous, blocking host I/O or arbitrary native host callbacks.
+- Paper/Purpur Bukkit plugin format and Folia owner-thread semantics require a separate compatibility architecture; LuckPerms/EssentialsX are service policies, FerrumC plugin crate is a placeholder and SteelMC command handling is not isolation. Networking optimizers are unrelated.
+- Dependency/legal caveat: adding Wasmtime, WIT bindings, build artifacts and new crates must pass a fresh exact pinned REV-LEGAL license/source/SBOM audit; the current 11-crate snapshot is not evidence for an expanded runtime.
+
+## Explicit alternatives and provisional selection
+
+| Model | Memory isolation | Recover from hung callback | Legacy C ABI | Risks |
+|---|---|---|---|---|
+| A. Current synchronous dlopen | None | No | Yes | Already fails disposable hang test |
+| B. Thread plus timeout | None | Cannot safely kill the native thread | Yes | REJECT: leaked thread, shared memory and side effects |
+| C. Separate native plugin process with bounded IPC | Process address space, subject to OS sandbox permissions | Parent can kill/reap timed-out worker | Potentially through a child adapter | IPC validation, process-tree/OS policy and crash recovery |
+| D. Wasmtime server component guest with explicit capabilities | WebAssembly guest isolation, bounded import surface | Guest fuel/epoch trap; blocking host imports need independent bounds | No, new WIT/component ABI required | Runtime dependencies, SDK, scheduling/permission integration |
+
+**Provisional direction:** D is the preferred future format for **untrusted, explicitly server-side extension code**, conditional on a minimal reproducible spike and full source-review approval. Keep existing native shared libraries labeled **trusted local only**; never call them sandboxed. Separately decide whether to disable them for untrusted deployments or isolate the legacy C ABI using C in an explicitly opt-in helper process. This is not Paper/Bukkit/Java compatibility.
+
+## Minimum server-side interface/security contract for a future spike
+
+1. Prevalidate a versioned server module manifest, unique ID, command labels, permission node and imported capability set. Unknown imports/side/ABI and duplicates fail before enable.
+2. Expose only typed host requests, immutable world/player snapshots and bounded log/command outputs; do not lend raw references or locks for host world, inventory, permission or JSON store state.
+3. Host alone validates authenticated identity (not yet implemented), world ownership, permission context and mutating requests on the correct owner thread. Unverified guests cannot forge player/group identities.
+4. Per-plugin Store with guest memory/instance/table/handle quotas, per-hook fuel plus an external responsiveness policy; bound every blocking host import and disk operation separately.
+5. Treat plugin load/enable/tick/command/disable errors as a guest failure transition, unregistering owned commands. Do not let a trapped plugin contaminate another plugin's state.
+6. Limit stdout/terminal control escape effects and deny WASI filesystem/network/OS access unless capability explicitly reviewed. Per-plugin data storage must have namespacing, quotas and atomic durability.
+7. Preserve deterministic command ownership and capped per-tick work already provided by the server.
+
+All of these are requirements, not achieved capabilities.
+
+## Acceptance and falsification matrix before migration approval
+
+| Experiment | Required observation |
+|---|---|
+| Guest infinite loop in init/tick/command | Bounded trap/stop of guest; main server remains responsive to status, version and stop |
+| Guest memory/table/handle growth | Guest denied at configured cap; measured host RSS and cost recorded separately |
+| Unknown import, wrong side/ABI, undeclared file/network access | Validation rejects before running guest callback |
+| Huge/invalid command manifest, duplicate aliases | No partial registration and no privileged command injection |
+| Slow/blocking host import | Independent time/I/O/queue budget; guest fuel alone cannot be credited |
+| Trap while shutting down | Host completes shutdown and releases persistent locks; no leftover worker |
+| Many plugins and command collisions | Deterministic ordering and resource budget accounted for |
+| Existing unsafe native shared library | Must remain explicitly unsafe, even if Wasm plugins pass |
+| Performance | Real release build, repeated same-host p50/p95/p99 hook time, idle/tick cost, cold start, memory and trap cost. No guessed speedup. |
+
+Regression prerequisites: Rust suite, scripts/test_native_plugin_nontermination.py (expected exposure), scripts/test_native_plugin_order.py, scripts/test_plugin_lifecycle.py, scripts/test_startup_preflight.py, TCP/storage integration and fresh Cargo license/review gate. A spike is not a product feature and must not bypass Phase -1.
+
+## Next steps and dependencies
+
+Before any code change, pin the Wasmtime crate version and exact license/dependency profile, confirm component feature and toolchain, then author the smallest **server-specific** WIT interface with one log callback and one safe bounded event; do NOT reuse the Horizon client interface unchanged. Bench CPU/fuel/epoch behavior, memory and host import time. Independently decide the native .so opt-in or subprocess migration; no thread watchdog is acceptable as an isolation substitute.
+
+The parent REV-PLUG, RV-CLOSE and nine retrospective review rows remain IN_REVIEW. This document does not authorize gameplay, server plugin API claims, a new runtime dependency, or publication as a secure sandbox.
