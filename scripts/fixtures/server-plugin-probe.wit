@@ -8,3 +8,14 @@ world server-probe {
     import note: func(value: u32);
     export run: func(value: u32) -> u32;
 }
+
+// Separate RV-PLUG-10 review-only request-admission sketch.
+// Status codes: 0 accepted, 1 invalid placeholder ID,
+// 2 event budget exhausted, 3 queue capacity reached.
+// A real server must replace numeric IDs with versioned, typed
+// requests and independently validate authenticated authority.
+world bounded-request-probe {
+    import submit: func(value: u32) -> u32;
+    export emit: func(value: u32) -> u32;
+    export burst-three: func(value: u32) -> u32;
+}
