@@ -149,7 +149,8 @@
         "scripts/test_plugin_lifecycle.py",
         "scripts/test_native_plugin_nontermination.py",
         "scripts/test_native_plugin_order.py",
-        "scripts/experiment_native_process_boundary.py"
+        "scripts/experiment_native_process_boundary.py",
+        "scripts/experiment_wasmtime_core_limits.py"
       ],
       "references": [
         "Horizon",
@@ -167,10 +168,11 @@
         "scripts/test_plugin_lifecycle.py": "41e26dd7dd11442200a2d47aed2dded666eeb463142c2fc18904fc1aee02176b",
         "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59",
         "scripts/test_native_plugin_order.py": "bef42bab89ce2ac56b5097fdee0b30f306c30357d071e385728ef7448ec4fc12",
-        "scripts/experiment_native_process_boundary.py": "d5530452eb66637ae5b314ea35925de2908a363c218d11ffedf12dc202e97eb5"
+        "scripts/experiment_native_process_boundary.py": "d5530452eb66637ae5b314ea35925de2908a363c218d11ffedf12dc202e97eb5",
+        "scripts/experiment_wasmtime_core_limits.py": "f3c5473c366d940a27c2269846e5bdd76b137a73d6f1401a25c352c51bcb54a5"
       },
-      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 independent native worker 8/8 two-trial normal/SIGSEGV/hang/same-user host-file tests: crashing/hanging workers killed and reaped; same-user filesystem write proves incomplete sandbox. RV-PLUG-02 actual Rust server still hangs on native .so. No server isolation integration.",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05/06 and docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Wasmtime client-only limitation and observed worker process crash/hang containment versus retained filesystem permissions; C versus D options unapproved."
+      "test_evidence_partial": "92 Rust tests; RV-PLUG-06 separate process normal/crash/hang/filesystem 8/8; RV-PLUG-07 temporary Python Wasmtime 50.0.1 six checks pass for core guest host import/fuel trap/declared memory cap/unlinked WASI/slow host-call counterexample/normal recovery; native server .so remains unsandboxed, no WIT/server implementation.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-05/06/07; docs/PLUGIN_ISOLATION_DECISION_2026-10-23.md: pinned Horizon Wasmtime Side::Server limitation, C worker same-user file-access gap, optional pinned wasmtime-py core guest fuel/memory/import and blocking host function proof, explicit unimplemented server WIT/host safety gates."
     },
     {
       "id": "REV-TICK",

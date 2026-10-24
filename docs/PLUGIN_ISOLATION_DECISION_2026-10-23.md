@@ -78,3 +78,18 @@ This is a disposable process feasibility harness, NOT integrated into the Minecr
 Incidental local timings are not benchmarks of production plugin execution latency or throughput. The first experimental C raise(SIGSEGV) variant stalled in this sandbox, and a text-buffered readiness read swallowed a fast normal-result marker; final passing harness uses a direct C null write and binary unbuffered marker read. Eight final trials passed. Only temporary test files and ephemeral children were used.
 
 Option C therefore demonstrates child fault containment and supervised termination under these conditions AND demonstrates missing filesystem protection. Before claiming a secure native plugin process, it must enforce OS credentials/file/network/sandbox policy, bounded authenticated IPC, process descendant escape control, resource quotas, permission and tick ownership checks, and complete server lifecycle integration. Existing Rust .so plugins still run IN-PROCESS without containment. Option D Wasmtime remains provisional and no such engine was installed in this session. No review approval is implied.
+
+
+## RV-PLUG-07 — Wasmtime 50.0.1 guest limits tested; no server-side WIT yet
+
+A second disposable proof tested official Python wasmtime-py exactly version 50.0.1 (PyPI release dated 2026-10-22, declared license Apache-2.0 WITH LLVM-exception). The package was installed with pip --no-deps to an isolated project-local scratch and removed when the command exited; Cargo.lock and the server binary were unchanged. Reproduce by installing the pinned wheel in a throwaway directory, putting it on PYTHONPATH only for the process, and running: python3 -B scripts/experiment_wasmtime_core_limits.py.
+
+Verified first-party WAT **core Wasm** guest behavior (not a component WIT interface):
+- Explicit import host.note(7) invoked and guest returned 17.
+- An infinite guest loop with 500 fuel trapped from fuel exhaustion. The local 0.0002s was a single observation, not a guarantee for arbitrary guests.
+- An attempt to grow the guest's declared 1..2-page linear memory by another four pages failed with result -1.
+- An unlinked wasi_snapshot_preview1.fd_write import was rejected before guest execution.
+- A synchronous Python host import deliberately slept 150ms, completed successfully with 200 original guest fuel still nonzero, proving fuel does not interrupt blocking host code.
+- A clean later callback succeeded following the tests.
+
+**Decision impact:** Engine-level guest fuel, import rejection and declared memory maximum can be demonstrated today without rewriting the server or adding a Rust dependency. The blocking host-call experiment independently validates why future server host functions must be bounded for time, I/O and queue depth or kept off the tick/region owner thread. A future WIT component host still needs separate verification of actual store limiter, epoch/wall interruption, capabilities, output quotas, authentication, owner-thread message dispatch, traps and Rust crate distribution/licenses. It must NOT reuse the pinned Horizon client-side runtime as if server mods were already supported. Existing Rust .so still executes in-process without any guest sandbox.
