@@ -135,3 +135,21 @@ Reproduce after the Rust 1.90 release build: python3 -B scripts/bench_admission.
 Environment at verification: Linux 7.2.11-1-cachyos x86_64, Python 3.14.8, Cargo/Rust 1.90.0, release binary. The first attempt at adding an unloaded comparison temporarily omitted a Python Path import; this was fixed before the measured rerun, and both the experiment and existing scripts/test_peer_admission.py passed.
 
 Total two trials: 16/16 intended same-IP refusals, 48/48 different-IP successes with that first IP saturated, 24/24 post-release successes, and 48/48 unloaded comparison successes. No Rust behavior was changed. These short local samples do not support a general speedup, real internet or NAT/proxy compatibility, volumetric DDoS resistance, p95/p99 service-level objectives, or gameplay TPS estimates. Further load testing should stress the global cap, prolonged connection churn, arrival-rate limits and error logging without conflating kernel listen backlog and application fairness.
+
+
+### RV-STATUS-02 / RV-NET-06: Status response client decoder compatibility
+
+The status JSON is preframed once and shared among connections. Its --motd
+parameter was previously unbounded, producing serialized UTF-8 strings
+exceeding the pinned Horizon StatusResponse Str(32767) decoder's char limit.
+An original-byte MOTD cap (4096 bytes) and serialized JSON cap (32767 bytes)
+now fail before binding TCP. The latter cap is more conservative than the
+decoder's maximum encoded bytes, ensuring valid response framing even with
+sixfold expansion of C0 control characters into JSON unicode escapes.
+
+Reproduce: cargo +1.90.0 build --release; python3 -B
+scripts/test_status_motd.py. Real server startup rejects 4097 original
+bytes before the listening banner; 4096 bytes of ASCII, controls and
+multi-byte Unicode produce parseable framed status and exact MOTD text.
+This is a correct configuration/protocol bound, not a measured p95/p99
+performance improvement, auth protection or gameplay benchmark.

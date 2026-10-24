@@ -26,7 +26,7 @@
         "scripts/test_peer_admission.py": "b2eba263130356065764127a95784b2078e736859f22fe3b35d660d7e61bc5d5",
         "scripts/bench_admission.py": "efac714884548751b4b6bd11240e46d025ca3c408958d8bb0c744174239ea5c7"
       },
-      "test_evidence_partial": "80 Rust tests; RV-NET-04 live peer fixture; RV-NET-05 2 release-server localhost saturation trials: 16/16 same-IP rejects, 48/48 other-IP status successes under full 8/8 quota, 24/24 post-release successes; no real WAN/proxy or DDoS conclusions.",
+      "test_evidence_partial": "89 Rust tests; RV-STATUS-02/RV-NET-06 configuration preflight and bounded JSON real TCP fixture, plus RV-NET-04/05 per-IP fairness evidence. Real WAN, auth and rate quotas pending.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-04 and RV-NET-05 pinned source comparisons, controlled benchmark methods, results and limitations"
     },
     {
@@ -34,7 +34,8 @@
       "status": "in_review",
       "paths": [
         "src/main.rs",
-        "scripts/bench_status.py"
+        "scripts/bench_status.py",
+        "scripts/test_status_motd.py"
       ],
       "references": [
         "Horizon",
@@ -42,11 +43,12 @@
       ],
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
-      "test_evidence_partial": "65 Rust tests; status-only worker 3.035s baseline vs ~1.02s one-second grace; immediate and 180ms delayed Pong, real process smoke",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-NET-02 source comparisons and post-code tradeoffs",
+      "test_evidence_partial": "89 Rust tests; RV-STATUS-02 failing-before 32768-byte MOTD generated JSON outside Horizon Str(32767); 4096-byte ASCII/escaped control/UTF-8 unit and real TCP fixture, 4097-byte pre-bind startup rejection. Full status parity review pending.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STATUS-02/RV-NET-06 pinned Horizon Str decoder, FerrumC writer, conservative byte-size cap, alternatives and verified boundaries.",
       "current_sha256": {
-        "src/main.rs": "25b9bab04937a35f96ff2dc03d17e806cf47aa184a24b8f4d1b507928556fb6f",
-        "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5"
+        "src/main.rs": "77529685ed15fb9b5dfd066bf7dc17133d27b8c35e1df9503cb0329c8fe66089",
+        "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5",
+        "scripts/test_status_motd.py": "4669ed3794d7f656953ecc7f70b3cfb5aade7b0cc06b03d3f1aba97323073ea7"
       }
     },
     {
@@ -180,7 +182,7 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/main.rs": "25b9bab04937a35f96ff2dc03d17e806cf47aa184a24b8f4d1b507928556fb6f"
+        "src/main.rs": "77529685ed15fb9b5dfd066bf7dc17133d27b8c35e1df9503cb0329c8fe66089"
       },
       "test_evidence_partial": "74 Rust tests; 17ms slow callback reproducer failed on old count-only queue, passes with cooperative 10ms cutoff; stop and zero-budget FIFO tests; release and integration smokes. Actual simulation TPS unverified.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-TICK-01 SteelMC/Paper/Folia source comparison, decisions and validation"

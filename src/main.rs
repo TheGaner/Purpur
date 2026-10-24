@@ -10,6 +10,10 @@ mod protocol;
 // suggestion queues will have separate capacities when login is implemented.
 const MAX_CONSOLE_COMMANDS_QUEUED: usize = 1024;
 const MAX_CONSOLE_COMMANDS_PER_TICK: usize = 128;
+// A 4096-byte MOTD expands by at most 6x in JSON escaping. The resulting
+// status stays within Horizon's 32767-character Str codec limit.
+const MAX_MOTD_BYTES: usize = 4096;
+const MAX_STATUS_JSON_BYTES: usize = 32767;
 // A cooperative policy: one blocking command can still overrun its tick.
 const MAX_CONSOLE_TIME_PER_TICK: Duration = Duration::from_millis(10);
 
@@ -84,6 +88,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unrecognized flag {arg}").into()),
         }
     }
+    // Check configured status framing BEFORE opening a listening port.
+    // Bad operator configuration must never start an unusable server.
+    let status_reply = Arc::new(make_status_response(&motd)?);
     let listener = TcpListener::bind(&bind)?;
     println!(
         "Purpur-Horizon standalone server at {} (MC 26.3 protocol {})",
@@ -94,7 +101,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Status players=0 and MOTD cannot change while the prototype is running.
     // Preframe once, then share immutable bytes among concurrent connections.
     // Dynamic player counts will later use a versioned, refreshed snapshot.
-    let status_reply = Arc::new(make_status_response(&motd));
     let mut plugins = plugins::Plugins::load(&plugins_dir);
     println!("{}", plugins.info());
     let mut commands = command::Registry::builtins();
@@ -214,19 +220,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 /// Complete status packet (length VarInt + packet ID + JSON payload) built
 /// once per startup. Login replies stay dynamic and framed independently.
-fn make_status_response(motd: &str) -> Vec<u8> {
+fn make_status_response(motd: &str) -> io::Result<Vec<u8>> {
+    if motd.len() > MAX_MOTD_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("--motd exceeds {MAX_MOTD_BYTES} UTF-8 bytes"),
+        ));
+    }
     let status = format!(
         r#"{{"version":{{"name":"Horizon-Purpur 26.3 prototype","protocol":{}}},"players":{{"max":0,"online":0}},"description":{{"text":{}}}}}"#,
         protocol::VERSION,
         protocol::json(motd)
     );
+    // The client decodes this payload with Str(32767). Limit serialized
+    // bytes as a defense in depth, including any future fixed JSON fields.
+    if status.len() > MAX_STATUS_JSON_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "status JSON exceeds client string size limit",
+        ));
+    }
     let mut payload = Vec::with_capacity(status.len() + 8);
     protocol::varint_write(0, &mut payload);
     protocol::write_string(&status, &mut payload);
     let mut framed = Vec::with_capacity(payload.len() + 5);
     protocol::varint_write(payload.len() as i32, &mut framed);
     framed.extend_from_slice(&payload);
-    framed
+    Ok(framed)
 }
 fn serve(mut socket: TcpStream, status_reply: &[u8]) -> io::Result<()> {
     use protocol::*;
@@ -399,7 +419,7 @@ mod tests {
     }
     #[test]
     fn preframed_status_matches_protocol_framing() {
-        let framed = make_status_response(r#"Horizon "optimized""#);
+        let framed = make_status_response(r#"Horizon "optimized""#).unwrap();
         let mut reader = &framed[..];
         let packet = protocol::frame_read_limited(&mut reader, 1024).unwrap();
         assert!(reader.is_empty());
@@ -410,12 +430,42 @@ mod tests {
         assert_eq!(c.remaining(), 0);
     }
     #[test]
+    fn configured_status_motd_cannot_exceed_client_string_limit() {
+        // Horizon's pinned status codec reads the JSON with Str(32767).
+        let error = make_status_response(&"a".repeat(32_768)).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        let error = make_status_response(&"a".repeat(MAX_MOTD_BYTES + 1)).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+    }
+    #[test]
+    fn bounded_status_supports_utf8_and_worst_case_json_escaping() {
+        // Each C0 control byte may expand to a 6-byte JSON escape.
+        for motd in [
+            "a".repeat(MAX_MOTD_BYTES),
+            "\u{0001}".repeat(MAX_MOTD_BYTES),
+            "é".repeat(MAX_MOTD_BYTES / 2),
+        ] {
+            assert_eq!(motd.len(), MAX_MOTD_BYTES);
+            let framed = make_status_response(&motd).unwrap();
+            let packet =
+                protocol::frame_read_limited(&mut framed.as_slice(), MAX_STATUS_JSON_BYTES + 16)
+                    .unwrap();
+            let mut cursor = protocol::Cursor::new(&packet);
+            assert_eq!(cursor.varint().unwrap(), 0);
+            let json = cursor.text(MAX_STATUS_JSON_BYTES).unwrap();
+            assert!(json.len() <= MAX_STATUS_JSON_BYTES);
+            assert_eq!(cursor.remaining(), 0);
+            let parsed: serde_json::Value = serde_json::from_str(json).unwrap();
+            assert_eq!(parsed["description"]["text"].as_str(), Some(motd.as_str()));
+        }
+    }
+    #[test]
     fn oversized_preauth_handshake_rejected_on_wire_without_payload() {
         let server = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = server.local_addr().unwrap();
         let handle = thread::spawn(move || {
             let (socket, _) = server.accept().unwrap();
-            serve(socket, &make_status_response("hello"))
+            serve(socket, &make_status_response("hello").unwrap())
                 .unwrap_err()
                 .kind()
         });
@@ -431,7 +481,7 @@ mod tests {
         let addr = server.local_addr().unwrap();
         let job = thread::spawn(move || {
             let (socket, _) = server.accept().unwrap();
-            serve(socket, &make_status_response("test")).unwrap();
+            serve(socket, &make_status_response("test").unwrap()).unwrap();
         });
         let mut client = TcpStream::connect(addr).unwrap();
         client
@@ -455,7 +505,7 @@ mod tests {
         let start = Instant::now();
         let job = thread::spawn(move || {
             let (socket, _) = server.accept().unwrap();
-            serve(socket, &make_status_response("test")).unwrap();
+            serve(socket, &make_status_response("test").unwrap()).unwrap();
         });
         let mut client = TcpStream::connect(addr).unwrap();
         client
@@ -485,7 +535,7 @@ mod tests {
         let addr = server.local_addr().unwrap();
         let job = thread::spawn(move || {
             let (socket, _) = server.accept().unwrap();
-            serve(socket, &make_status_response("test")).unwrap();
+            serve(socket, &make_status_response("test").unwrap()).unwrap();
         });
         let mut client = TcpStream::connect(addr).unwrap();
         client
@@ -511,7 +561,7 @@ mod tests {
         let addr = server.local_addr().unwrap();
         let job = thread::spawn(move || {
             let (socket, _) = server.accept().unwrap();
-            serve(socket, &make_status_response("Horizon \"only\"")).unwrap();
+            serve(socket, &make_status_response("Horizon \"only\"").unwrap()).unwrap();
         });
         let mut client = TcpStream::connect(addr).unwrap();
         let mut hs = vec![0];
@@ -536,7 +586,7 @@ mod tests {
         let addr = server.local_addr().unwrap();
         let job = thread::spawn(move || {
             let (socket, _) = server.accept().unwrap();
-            serve(socket, &make_status_response("test")).unwrap();
+            serve(socket, &make_status_response("test").unwrap()).unwrap();
         });
         let mut client = TcpStream::connect(addr).unwrap();
         let mut hs = vec![0];

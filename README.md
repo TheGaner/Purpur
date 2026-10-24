@@ -368,3 +368,15 @@ in-memory permission helper, like the native persistent evaluator,
 does not treat an empty node as an implicit Allow. A future intentionally
 public command feature would need an explicit reviewed policy rather
 than using an empty string as an undocumented bypass.
+
+
+### Server-list MOTD and status response bounds
+
+The --motd configuration accepts at most 4096 UTF-8 *bytes*, not characters.
+The serialized protocol-777 JSON status is also capped at 32767 bytes,
+a deliberately conservative bound relative to Horizon's Str(32767)
+character decoder. Invalid MOTDs are rejected before the TCP port binds,
+rather than silently truncated or sent as responses clients cannot decode.
+Valid multibyte strings and JSON-escaped control characters are preserved.
+Run python3 -B scripts/test_status_motd.py after building the release server
+to check the error path and the real TCP status response boundaries.
