@@ -303,3 +303,16 @@ wildcard-node syntax where applicable). Malformed, empty or oversized
 lookup strings return Undefined before entering the 8,192-entry cache.
 This prevents oversized lookup keys from retaining unbounded memory, but
 does not establish authenticated remote access or LuckPerms parity.
+
+
+### Native permission cache and ancestry bounds
+
+Inherited permission groups are now marked visited when first queued,
+so a convergent graph cannot repeatedly enqueue the same subject.
+More than 128 distinct reachable subjects continues to return Undefined
+rather than making a decision from a partial graph. An unrelated
+expiring node/world permission no longer prematurely invalidates the
+cached answer for another requested node/world. Relevant expiring
+rules still invalidate the decision at the expiration timestamp.
+These guarantees do not establish full LuckPerms priority/context parity
+or a measured performance improvement.

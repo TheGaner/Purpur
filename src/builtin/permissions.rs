@@ -473,30 +473,28 @@ impl NativePermissions {
             }
         }
         let mut subjects = VecDeque::from([(key.principal.clone(), 0usize)]);
-        let mut visited = HashSet::new();
+        // Mark on enqueue, not dequeue: convergent inheritance must not
+        // multiply pending work or change the shortest-path depth.
+        let mut visited = HashSet::from([key.principal.clone()]);
         let mut best: Option<((usize, usize, usize), Decision)> = None;
         let mut next_expiry: Option<u64> = None;
         while let Some((subject, depth)) = subjects.pop_front() {
-            if !visited.insert(subject.clone()) {
-                continue;
-            }
-            // A permission answer from only part of the reachable group
-            // graph is not authoritative. A bounded evaluator must deny.
-            if visited.len() > MAX_SUBJECTS {
-                return Decision::Undefined;
-            }
+            debug_assert!(subjects.len() < MAX_SUBJECTS);
             if let Some(grants) = self.data.grants.get(&subject) {
                 for rule in grants {
-                    if let Some(exp) = rule.expires_at {
-                        if exp <= now {
-                            continue;
-                        }
-                        next_expiry = Some(next_expiry.map_or(exp, |previous| previous.min(exp)));
-                    }
                     if rule.world.as_deref().is_some_and(|w| Some(w) != world) {
                         continue;
                     }
                     if let Some(spec) = match_node(&rule.node, &key.node) {
+                        if let Some(exp) = rule.expires_at {
+                            if exp <= now {
+                                continue;
+                            }
+                            // Only rules relevant to this lookup can change
+                            // its cached answer when they expire.
+                            next_expiry =
+                                Some(next_expiry.map_or(exp, |previous| previous.min(exp)));
+                        }
                         // Most specific node, then contextual rule, then direct/closest parent.
                         let rank = (
                             spec,
@@ -516,7 +514,12 @@ impl NativePermissions {
             }
             if let Some(groups) = self.data.parents.get(&subject) {
                 for group in groups {
-                    if !visited.contains(group) {
+                    if visited.insert(group.clone()) {
+                        // No partial authorization if a 129th distinct
+                        // reachable subject would exceed our graph cap.
+                        if visited.len() > MAX_SUBJECTS {
+                            return Decision::Undefined;
+                        }
                         subjects.push_back((group.clone(), depth + 1));
                     }
                 }
@@ -671,6 +674,106 @@ mod tests {
             Decision::Deny
         );
         let _ = fs::remove_file(path);
+    }
+    #[test]
+    fn unrelated_expirations_do_not_invalidate_permission_cache() {
+        let (path, mut db) = db();
+        db.set("alex", "test.read", Decision::Allow, None, None)
+            .unwrap();
+        db.set("alex", "test.other", Decision::Deny, None, Some(105))
+            .unwrap();
+        db.set(
+            "alex",
+            "test.read",
+            Decision::Deny,
+            Some("nether"),
+            Some(106),
+        )
+        .unwrap();
+        assert_eq!(
+            db.resolve("alex", "test.read", Some("overworld"), 100),
+            Decision::Allow
+        );
+        let cache = db.cache.lock().unwrap();
+        let entry = cache.values().next().unwrap();
+        assert_eq!(
+            entry.valid_until, None,
+            "unrelated expiry forces a needless re-evaluation"
+        );
+        drop(cache);
+        assert_eq!(
+            db.resolve("alex", "test.read", Some("overworld"), 110),
+            Decision::Allow
+        );
+        assert_eq!(
+            db.cache
+                .lock()
+                .unwrap()
+                .values()
+                .next()
+                .unwrap()
+                .calculated_at,
+            100,
+            "unaffected cache should still serve later timestamps"
+        );
+        assert_eq!(
+            db.resolve("alex", "test.read", Some("nether"), 105),
+            Decision::Deny
+        );
+        let other = db.cache.lock().unwrap();
+        let relevant = other
+            .iter()
+            .find(|(key, _)| key.world.as_deref() == Some("nether"))
+            .unwrap()
+            .1;
+        assert_eq!(relevant.valid_until, Some(106));
+        drop(other);
+        assert_eq!(
+            db.resolve("alex", "test.read", Some("nether"), 106),
+            Decision::Allow
+        );
+        drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
+    }
+    #[test]
+    fn highly_convergent_group_graph_is_valid_and_still_fails_closed_over_limit() {
+        let (path, mut db) = db();
+        let mut next = db.data.clone();
+        let direct = (0..60)
+            .map(|i| format!("group:direct{i}"))
+            .collect::<Vec<_>>();
+        let shared = (0..60)
+            .map(|i| format!("group:shared{i}"))
+            .collect::<Vec<_>>();
+        next.parents.insert("user:alex".into(), direct.clone());
+        for group in &direct {
+            next.parents.insert(group.clone(), shared.clone());
+        }
+        next.grants.insert(
+            "group:shared59".into(),
+            vec![Rule {
+                node: "test.dense".into(),
+                decision: Decision::Allow,
+                world: None,
+                expires_at: None,
+            }],
+        );
+        db.commit(next).unwrap();
+        // 121 distinct subjects, but 60 + 60*60 outgoing edges. A BFS should
+        // enqueue every unique group only once, not one entry for every edge.
+        assert_eq!(db.resolve("alex", "test.dense", None, 100), Decision::Allow);
+        assert_eq!(db.resolve("alex", "test.dense", None, 101), Decision::Allow);
+        for i in 0..8 {
+            db.add_parent("alex", &format!("overflow{i}")).unwrap();
+        }
+        assert_eq!(
+            db.resolve("alex", "test.dense", None, 102),
+            Decision::Undefined
+        );
+        drop(db);
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_file(path.with_extension("json.lock"));
     }
     #[test]
     fn persistent_group_remove_and_revisions() {
