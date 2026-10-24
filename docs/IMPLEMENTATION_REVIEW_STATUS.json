@@ -46,7 +46,7 @@
       "test_evidence_partial": "89 Rust tests; RV-STATUS-02 failing-before 32768-byte MOTD generated JSON outside Horizon Str(32767); 4096-byte ASCII/escaped control/UTF-8 unit and real TCP fixture, 4097-byte pre-bind startup rejection. Full status parity review pending.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STATUS-02/RV-NET-06 pinned Horizon Str decoder, FerrumC writer, conservative byte-size cap, alternatives and verified boundaries.",
       "current_sha256": {
-        "src/main.rs": "a95d2b7a6364c852080b96152aaba6569b82e855fd9e4f449694be3a235c11e4",
+        "src/main.rs": "7139ecd002e924778060805b69be2cf1d4b298c8624b79256e7996a7c0c6ceed",
         "scripts/bench_status.py": "9efbe07cc2bd4d7093d99f74d55f39240c6250e61439746c22a786b16bbbd2c5",
         "scripts/test_status_motd.py": "4669ed3794d7f656953ecc7f70b3cfb5aade7b0cc06b03d3f1aba97323073ea7"
       }
@@ -119,7 +119,8 @@
       "paths": [
         "src/builtin/permissions.rs",
         "src/builtin/utilities.rs",
-        "scripts/test_single_writer.py"
+        "scripts/test_single_writer.py",
+        "scripts/test_startup_preflight.py"
       ],
       "references": [
         "LuckPerms",
@@ -132,10 +133,11 @@
       "current_sha256": {
         "src/builtin/permissions.rs": "3de228567cb007970f39b8828f97f99ec5faea8cccf1197501be29095d10c338",
         "src/builtin/utilities.rs": "4f42111de84618ab44ba9f147a38ae1b1aa63427c78f42634e07f7a6e810a658",
-        "scripts/test_single_writer.py": "0f1dd52e68dcdc1c2a3c203e9210848ff881769050ea1ba458e08a79d6dd7c05"
+        "scripts/test_single_writer.py": "0f1dd52e68dcdc1c2a3c203e9210848ff881769050ea1ba458e08a79d6dd7c05",
+        "scripts/test_startup_preflight.py": "ea980fad35677e0881f445e287988b3544e80f7ced89105e2f7400c2fae35058"
       },
-      "test_evidence_partial": "57 Rust tests; real 2-process lock, clean/SIGKILL restart and Java lifecycle; deterministic post-rename directory sync failure tests; real power-loss pending",
-      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md REV-STORAGE-02 pre/post code comparisons and failure-state policy"
+      "test_evidence_partial": "92 Rust tests; RV-STORAGE-03 isolated real two-server shared-data directory reproduced plugin onEnable/listener ready before lock failure, fixed by opening both stores before binding/loading; corrupt utilities.json now rejects before plugin side effects; prior clean/crash and legacy migration tests still pass.",
+      "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-STORAGE-03/RV-PLUG-04 LuckPerms storage init and Horizon Wasmtime plugin lifecycle comparison, before/after startup sequencing."
     },
     {
       "id": "REV-PLUG",
@@ -165,7 +167,7 @@
         "scripts/test_native_plugin_nontermination.py": "184b50b6fefb00c7c727cb3eeeca856a4f290e49c7a9feeb6db67caa40c59c59",
         "scripts/test_native_plugin_order.py": "bef42bab89ce2ac56b5097fdee0b30f306c30357d071e385728ef7448ec4fc12"
       },
-      "test_evidence_partial": "87 Rust baseline including RV-CMD-03; RV-PLUG-03 3/3 deterministic C ABI duplicate command order trials; real C ABI empty-permission manifest rejected; RV-PLUG-02 native callback hang still unresolved; normal/hung Java lifecycle fixtures.",
+      "test_evidence_partial": "92 Rust tests; RV-PLUG-04 native enable C marker moved after complete JSON store preflight (two-writer/corrupt data); RV-PLUG-02 nonreturning native callbacks still NOT isolated; Java normal/hung lifecycle and native command ordering regressions.",
       "design_evidence_partial": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md RV-PLUG-02 native execution risks and RV-PLUG-03 pinned Horizon sorted mod discovery, SteelMC registration comparison, before/after ordering evidence and tradeoffs."
     },
     {
@@ -183,7 +185,7 @@
       "evidence": "docs/IMPLEMENTATION_REFERENCE_AUDIT.md",
       "approved_sha256": {},
       "current_sha256": {
-        "src/main.rs": "a95d2b7a6364c852080b96152aaba6569b82e855fd9e4f449694be3a235c11e4",
+        "src/main.rs": "7139ecd002e924778060805b69be2cf1d4b298c8624b79256e7996a7c0c6ceed",
         "scripts/test_console_ingress.py": "3e57e02adacdad25664ff83c4529231b32a50dbe0b20782753d6293ad7e029f7"
       },
       "test_evidence_partial": "92 Rust tests; RV-TICK-02 demonstrated 65KiB stdin read_line allocation before fix, now bounds complete line at 4096 original content bytes with CRLF, rejects and drains 300KiB stop prefix, preserves following version/stop via real release-server fixture; queue/tick budgets still cooperative.",

@@ -393,3 +393,16 @@ temporary input allocation independently of the 1024-command queue and
 the registry's separate input-length check. After building release,
 python3 -B scripts/test_console_ingress.py verifies a 300KiB invalid
 line beginning with stop cannot shut down the server early.
+
+
+### Startup data ownership preflight
+
+Before opening the TCP listener, emitting its startup banner, or loading
+native/Java plugins, the server now acquires the lifetime exclusive locks
+and validates BOTH persistent permissions.json and utilities.json stores.
+A second server using the same data files, or a corrupt utility database,
+fails without triggering the plugin enable callbacks or announcing a
+listener. This is a preflight guarantee, not sandboxing for trusted native
+plugins after a successful startup. Run
+python3 -B scripts/test_startup_preflight.py after building release to
+exercise two isolated server processes and a disposable native test plugin.

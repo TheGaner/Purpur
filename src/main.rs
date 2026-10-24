@@ -144,9 +144,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unrecognized flag {arg}").into()),
         }
     }
-    // Check configured status framing BEFORE opening a listening port.
-    // Bad operator configuration must never start an unusable server.
+    // Complete all fallible first-party preflight before network exposure or
+    // unbounded native plugin enable callbacks. Both data stores must be
+    // valid and exclusively owned by this server before declaring readiness.
     let status_reply = Arc::new(make_status_response(&motd)?);
+    let mut permissions =
+        builtin::permissions::NativePermissions::open(data_dir.join("permissions.json"))?;
+    let mut utilities = builtin::utilities::NativeUtilities::open(data_dir.join("utilities.json"))?;
     let listener = TcpListener::bind(&bind)?;
     println!(
         "Purpur-Horizon standalone server at {} (MC 26.3 protocol {})",
@@ -162,11 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut commands = command::Registry::builtins();
     builtin::register(&mut commands);
     plugins.register_commands(&mut commands);
-    // Always-on native services. Refuse corrupt persisted state rather than
-    // silently resetting access rules or player homes/warps.
-    let mut permissions =
-        builtin::permissions::NativePermissions::open(data_dir.join("permissions.json"))?;
-    let mut utilities = builtin::utilities::NativeUtilities::open(data_dir.join("utilities.json"))?;
+    // Already validated and locked before exposing the listener/plugins.
     println!("Native Rust permissions and utilities: enabled");
     let started = Instant::now();
     let (tx, rx) = mpsc::sync_channel(MAX_CONSOLE_COMMANDS_QUEUED);
